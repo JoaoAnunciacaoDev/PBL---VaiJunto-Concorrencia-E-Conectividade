@@ -1,0 +1,36 @@
+services:
+  # Servidor Central de Caronas (TCP)
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: vaijunto-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../internal/data:/app/internal/data
+    restart: unless-stopped
+
+  # Cliente Motorista Interativo (Terminal)
+  driver-client:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: vaijunto-driver
+    command: ["/app/bin/driver-client", "-addr=server:8080"]
+    depends_on:
+      - server
+    stdin_open: true
+    tty: true
+
+  # Cliente Passageiro Interativo (Terminal)
+  passenger-client:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: vaijunto-passenger
+    command: ["/app/bin/passenger-client", "-addr=server:8080"]
+    depends_on:
+      - server
+    stdin_open: true
+    tty: true

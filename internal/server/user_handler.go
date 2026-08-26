@@ -23,10 +23,22 @@ func (s *Server) handleRegisterUser(payload json.RawMessage) protocol.Response {
 	name := strings.TrimSpace(dto.Name)
 	email := strings.ToLower(strings.TrimSpace(dto.Email))
 
-	if name == "" || email == "" || len(dto.Password) < 8 {
+	if name == "" {
 		return protocol.Response{
 			Success: "error",
-			Message: "Nome, e-mail e senha de ao menos 8 caracteres são obrigatórios.",
+			Message: "Nome é obrigatório.",
+		}
+	}
+	if !isValidEmail(email) {
+		return protocol.Response{
+			Success: "error",
+			Message: "E-mail inválido.",
+		}
+	}
+	if !isValidPassword(dto.Password) {
+		return protocol.Response{
+			Success: "error",
+			Message: "A senha deve ter ao menos 8 caracteres, uma letra, um número e um caractere especial.",
 		}
 	}
 

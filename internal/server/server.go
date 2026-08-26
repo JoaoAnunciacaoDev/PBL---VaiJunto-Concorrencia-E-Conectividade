@@ -14,11 +14,17 @@ type Server struct {
 	repository *Repository
 }
 
-func NewServer(addr string) *Server {
+func NewServer(addr, usersPath string) (*Server, error) {
+	repository, err := NewRepository(usersPath)
+
+	if err != nil {
+		return nil, fmt.Errorf("carregar repositório: %w", err)
+	}
+
 	return &Server{
 		addr:       addr,
-		repository: NewRepository(),
-	}
+		repository: repository,
+	}, nil
 }
 
 func (s *Server) Start() error {
