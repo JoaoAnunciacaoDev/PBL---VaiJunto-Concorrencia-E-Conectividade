@@ -6,8 +6,14 @@ import (
 )
 
 type Session struct {
-	UserID uuid.UUID
-	Role   models.UserRole
+	ID       uuid.UUID
+	UserID   uuid.UUID
+	Role     models.UserRole
+	UserName string
+}
+
+func NewSession() *Session {
+	return &Session{ID: uuid.New()}
 }
 
 func (s *Session) IsAuthenticated() bool {
@@ -17,4 +23,5 @@ func (s *Session) IsAuthenticated() bool {
 func (s *Session) Clear() {
 	s.UserID = uuid.Nil
 	s.Role = ""
+	s.UserName = ""
 }

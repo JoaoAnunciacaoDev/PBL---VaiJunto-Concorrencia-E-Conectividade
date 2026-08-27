@@ -2,11 +2,11 @@ package server
 
 import (
 	"encoding/json"
-	"strings"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"strings"
 )
 
 func (s *Server) handleRegisterUser(payload json.RawMessage) protocol.Response {
@@ -95,6 +95,7 @@ func (s *Server) handleLogin(payload json.RawMessage, session *Session) protocol
 
 	session.UserID = user.ID
 	session.Role = user.Role
+	session.UserName = user.Name
 
 	return userResponse(*user, "Login bem-sucedido")
 }

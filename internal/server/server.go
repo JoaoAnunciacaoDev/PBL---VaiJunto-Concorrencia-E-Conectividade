@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"io"
+	"log"
 	"net"
+
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 )
 
 type Server struct {
@@ -51,10 +53,14 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
-	defer conn.Close()
-
 	reader := bufio.NewReader(conn)
-	session := &Session{}
+	session := NewSession()
+	remoteAddress := conn.RemoteAddr().String()
+	log.Printf("connection opened remote=%s session=%s", remoteAddress, session.ID)
+	defer func() {
+		log.Printf("connection closed remote=%s session=%s user=%q", remoteAddress, session.ID, session.UserName)
+		conn.Close()
+	}()
 
 	for {
 		var request protocol.Request
@@ -62,18 +68,26 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				fmt.Println("Cliente encerrou a conexão.")
+				log.Printf("client disconnected remote=%s session=%s", remoteAddress, session.ID)
 				return
 			}
 
-			fmt.Printf("Erro ao ler requisição: %v\n", err)
+			log.Printf("request read failed remote=%s session=%s error=%v", remoteAddress, session.ID, err)
 			return
 		}
 
+		userName := session.UserName
 		res := s.processRequest(request, session)
+		if userName == "" {
+			userName = "anonymous"
+			if session.UserName != "" {
+				userName = session.UserName
+			}
+		}
+		log.Printf("request action=%s session=%s user=%q result=%s", request.Action, session.ID, userName, res.Success)
 
 		if err := protocol.SendJson(conn, res); err != nil {
-			fmt.Printf("Erro ao enviar resposta: %v\n", err)
+			log.Printf("response send failed remote=%s session=%s user=%q error=%v", remoteAddress, session.ID, userName, err)
 			return
 		}
 	}
@@ -95,6 +109,15 @@ func (s *Server) processRequest(request protocol.Request, session *Session) prot
 
 	case "register_vehicle":
 		return s.handleRegisterVehicle(request.Payload, session)
+
+	case "get_my_vehicle":
+		return s.handleGetMyVehicle(session)
+
+	case "update_vehicle":
+		return s.handleUpdateVehicle(request.Payload, session)
+
+	case "remove_vehicle":
+		return s.handleRemoveVehicle(session)
 
 	default:
 		return protocol.Response{Success: "error", Message: "Ação desconhecida"}

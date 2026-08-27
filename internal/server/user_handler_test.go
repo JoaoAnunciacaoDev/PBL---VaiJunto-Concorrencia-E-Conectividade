@@ -163,6 +163,9 @@ func TestSessionAllowsProfileOnlyAfterLoginAndClearsOnLogout(t *testing.T) {
 	if !session.IsAuthenticated() {
 		t.Fatal("login deveria autenticar a sessão")
 	}
+	if session.UserName != registration.Name {
+		t.Errorf("nome na sessão = %q, esperado %q", session.UserName, registration.Name)
+	}
 
 	profileResponse := sendRequestWithSession(t, server, session, "get_my_profile", nil)
 	if profileResponse.Success != "success" {
@@ -182,6 +185,9 @@ func TestSessionAllowsProfileOnlyAfterLoginAndClearsOnLogout(t *testing.T) {
 	}
 	if session.IsAuthenticated() {
 		t.Fatal("logout deveria limpar a sessão")
+	}
+	if session.UserName != "" {
+		t.Errorf("nome da sessão após logout = %q, esperado vazio", session.UserName)
 	}
 	if response := sendRequestWithSession(t, server, session, "get_my_profile", nil); response.Success != "error" {
 		t.Fatalf("perfil após logout deveria falhar, recebeu: %s", response.Message)
@@ -248,6 +254,36 @@ func TestRegisterVehicleRequiresAuthenticatedDriver(t *testing.T) {
 	}
 	if storedDriver.Vehicle.Plate != "ABC-1234" {
 		t.Errorf("placa = %q, esperado %q", storedDriver.Vehicle.Plate, "ABC-1234")
+	}
+
+	getResponse := sendRequestWithSession(t, server, driverSession, "get_my_vehicle", nil)
+	if getResponse.Success != "success" {
+		t.Fatalf("consulta do veículo deveria funcionar, recebeu: %s", getResponse.Message)
+	}
+
+	updatedVehicle := protocol.CreateVehicleRequest{
+		Plate:        "def-5678",
+		Model:        "Sedan",
+		Color:        "Preto",
+		SeatCapacity: 5,
+	}
+	updateResponse := sendRequestWithSession(t, server, driverSession, "update_vehicle", updatedVehicle)
+	if updateResponse.Success != "success" {
+		t.Fatalf("atualização do veículo deveria funcionar, recebeu: %s", updateResponse.Message)
+	}
+	if storedDriver.Vehicle.Plate != "DEF-5678" || storedDriver.Vehicle.SeatCapacity != 5 {
+		t.Errorf("veículo não foi atualizado corretamente: %+v", storedDriver.Vehicle)
+	}
+
+	removeResponse := sendRequestWithSession(t, server, driverSession, "remove_vehicle", nil)
+	if removeResponse.Success != "success" {
+		t.Fatalf("remoção do veículo deveria funcionar, recebeu: %s", removeResponse.Message)
+	}
+	if storedDriver.HasVehicle() {
+		t.Fatal("motorista não deveria possuir veículo após remoção")
+	}
+	if response := sendRequestWithSession(t, server, driverSession, "get_my_vehicle", nil); response.Success != "error" {
+		t.Fatalf("consulta após remoção deveria falhar, recebeu: %s", response.Message)
 	}
 }
 

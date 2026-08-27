@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
+	"strconv"
+	"strings"
+
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/utils"
-	"io"
-	"strings"
 )
 
 type TerminalOptions struct {
@@ -211,7 +213,7 @@ func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 		fmt.Fprintln(output, "1 - Ver meu perfil")
 
 		if user.Role == models.RoleDriver {
-			fmt.Fprintln(output, "2 - Opções de motorista (em desenvolvimento)")
+			fmt.Fprintln(output, "2 - Opções de motorista")
 		} else {
 			fmt.Fprintln(output, "2 - Opções de passageiro (em desenvolvimento)")
 		}
@@ -232,7 +234,13 @@ func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 
 		case "2":
 			utils.ClearTerminal()
-			fmt.Fprintln(output, "Esta funcionalidade ainda não foi implementada.")
+			if user.Role == models.RoleDriver {
+				if !driverMenu(tcpClient, input, output) {
+					return false
+				}
+			} else {
+				fmt.Fprintln(output, "Esta funcionalidade ainda não foi implementada.")
+			}
 
 		case "0":
 			utils.ClearTerminal()
@@ -246,6 +254,176 @@ func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 			fmt.Fprintln(output, "Opção inválida.")
 		}
 	}
+}
+
+func driverMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
+	for {
+		fmt.Fprintln(output, "\n=== Terminal do Motorista ===")
+		fmt.Fprintln(output, "1 - Veículo")
+		fmt.Fprintln(output, "2 - Carona")
+		fmt.Fprintln(output, "0 - Voltar")
+
+		choice, err := readLine(input, output, "Opção: ")
+		if err != nil {
+			return true
+		}
+
+		switch choice {
+		case "1":
+			utils.ClearTerminal()
+			if !vehicleMenu(tcpClient, input, output) {
+				return false
+			}
+		case "2":
+			utils.ClearTerminal()
+			fmt.Fprintln(output, "Módulo de caronas em desenvolvimento.")
+		case "0":
+			return true
+		default:
+			fmt.Fprintln(output, "Opção inválida.")
+		}
+	}
+}
+
+func vehicleMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
+	for {
+		fmt.Fprintln(output, "\n=== Veículo ===")
+		fmt.Fprintln(output, "1 - Cadastrar")
+		fmt.Fprintln(output, "2 - Consultar")
+		fmt.Fprintln(output, "3 - Atualizar")
+		fmt.Fprintln(output, "4 - Remover")
+		fmt.Fprintln(output, "0 - Voltar")
+
+		choice, err := readLine(input, output, "Opção: ")
+		if err != nil {
+			return true
+		}
+
+		switch choice {
+		case "1":
+			utils.ClearTerminal()
+			if !registerVehicle(tcpClient, input, output) {
+				return false
+			}
+		case "2":
+			utils.ClearTerminal()
+			if !showMyVehicle(tcpClient, output) {
+				return false
+			}
+		case "3":
+			utils.ClearTerminal()
+			if !updateVehicle(tcpClient, input, output) {
+				return false
+			}
+		case "4":
+			utils.ClearTerminal()
+			if !removeVehicle(tcpClient, input, output) {
+				return false
+			}
+		case "0":
+			return true
+		default:
+			fmt.Fprintln(output, "Opção inválida.")
+		}
+	}
+}
+
+func registerVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
+	return submitVehicle(tcpClient, input, output, "register_vehicle", "cadastro")
+}
+
+func updateVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
+	return submitVehicle(tcpClient, input, output, "update_vehicle", "atualização")
+}
+
+func submitVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, action, operation string) bool {
+	plate, err := readLine(input, output, "Placa: ")
+	if err != nil {
+		fmt.Fprintln(output, "Não foi possível ler a placa.")
+		return true
+	}
+	model, err := readLine(input, output, "Modelo: ")
+	if err != nil {
+		fmt.Fprintln(output, "Não foi possível ler o modelo.")
+		return true
+	}
+	color, err := readLine(input, output, "Cor: ")
+	if err != nil {
+		fmt.Fprintln(output, "Não foi possível ler a cor.")
+		return true
+	}
+	capacityText, err := readLine(input, output, "Quantidade de assentos: ")
+	if err != nil {
+		fmt.Fprintln(output, "Não foi possível ler a capacidade.")
+		return true
+	}
+	seatCapacity, err := strconv.Atoi(capacityText)
+	if err != nil {
+		fmt.Fprintln(output, "A quantidade de assentos deve ser um número inteiro.")
+		return true
+	}
+
+	payload, err := json.Marshal(protocol.CreateVehicleRequest{
+		Plate:        plate,
+		Model:        model,
+		Color:        color,
+		SeatCapacity: seatCapacity,
+	})
+	if err != nil {
+		fmt.Fprintf(output, "Não foi possível preparar a %s do veículo.\n", operation)
+		return true
+	}
+
+	response, err := tcpClient.Send(protocol.Request{Action: action, Payload: payload})
+	if err != nil {
+		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
+		return false
+	}
+
+	fmt.Fprintln(output, response.Message)
+	return true
+}
+
+func showMyVehicle(tcpClient *TCPClient, output io.Writer) bool {
+	response, err := tcpClient.Send(protocol.Request{Action: "get_my_vehicle"})
+	if err != nil {
+		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
+		return false
+	}
+	if response.Success != "success" {
+		fmt.Fprintln(output, response.Message)
+		return true
+	}
+
+	var vehicle models.Vehicle
+	if err := json.Unmarshal(response.Payload, &vehicle); err != nil {
+		fmt.Fprintln(output, "O servidor retornou uma resposta inválida.")
+		return true
+	}
+
+	fmt.Fprintf(output, "Placa: %s\nModelo: %s\nCor: %s\nAssentos: %d\n", vehicle.Plate, vehicle.Model, vehicle.Color, vehicle.SeatCapacity)
+	return true
+}
+
+func removeVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
+	confirmation, err := readLine(input, output, "Confirma a remoção do veículo? (s/N): ")
+	if err != nil {
+		fmt.Fprintln(output, "Não foi possível ler a confirmação.")
+		return true
+	}
+	if strings.ToLower(confirmation) != "s" {
+		fmt.Fprintln(output, "Remoção cancelada.")
+		return true
+	}
+
+	response, err := tcpClient.Send(protocol.Request{Action: "remove_vehicle"})
+	if err != nil {
+		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
+		return false
+	}
+
+	fmt.Fprintln(output, response.Message)
+	return true
 }
 
 func showMyProfile(tcpClient *TCPClient, output io.Writer) bool {
