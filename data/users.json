@@ -1,0 +1,16 @@
+[
+  {
+    "uuid": "65ef1243-aed0-48de-83a8-b4099cc73040",
+    "name": "Jeremias",
+    "email": "jeremias@outlook.com",
+    "password_hash": "$2a$10$bQPCH6V.mJ8yx9gKQjesgO4Xi3hhELXVlWSWnKyl8oyuAq54N56Ly",
+    "role": "DRIVER"
+  },
+  {
+    "uuid": "00380e4f-3066-4ff5-8746-7156b5abe681",
+    "name": "João V",
+    "email": "jv@gmail.com",
+    "password_hash": "$2a$10$55d3ao1io3OVw4T7vDDGZuAmHvfeXhH3aVBsPxrakvWuSrRpadXWO",
+    "role": "PASSENGER"
+  }
+]
