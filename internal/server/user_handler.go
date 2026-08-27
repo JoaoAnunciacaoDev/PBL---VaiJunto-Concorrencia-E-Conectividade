@@ -68,7 +68,7 @@ func (s *Server) handleRegisterUser(payload json.RawMessage) protocol.Response {
 	return userResponse(user, "Usuário cadastrado com sucesso")
 }
 
-func (s *Server) handleLogin(payload json.RawMessage) protocol.Response {
+func (s *Server) handleLogin(payload json.RawMessage, session *Session) protocol.Response {
 	var dto protocol.LoginRequest
 
 	if err := json.Unmarshal(payload, &dto); err != nil {
@@ -94,7 +94,45 @@ func (s *Server) handleLogin(payload json.RawMessage) protocol.Response {
 		}
 	}
 
+	session.UserID = user.ID
+	session.Role = user.Role
+
 	return userResponse(*user, "Login bem-sucedido")
+}
+
+func (s *Server) handleGetMyProfile(session *Session) protocol.Response {
+	if !session.IsAuthenticated() {
+		return protocol.Response{
+			Success: "error",
+			Message: "Autenticação necessária.",
+		}
+	}
+
+	user, err := s.repository.GetUserByID(session.UserID)
+	if err != nil {
+		session.Clear()
+		return protocol.Response{
+			Success: "error",
+			Message: "Sessão inválida. Faça login novamente.",
+		}
+	}
+
+	return userResponse(*user, "Perfil obtido com sucesso")
+}
+
+func (s *Server) handleLogout(session *Session) protocol.Response {
+	if !session.IsAuthenticated() {
+		return protocol.Response{
+			Success: "error",
+			Message: "Nenhum usuário está autenticado.",
+		}
+	}
+
+	session.Clear()
+	return protocol.Response{
+		Success: "success",
+		Message: "Logout realizado com sucesso.",
+	}
 }
 
 func userResponse(user models.User, message string) protocol.Response {

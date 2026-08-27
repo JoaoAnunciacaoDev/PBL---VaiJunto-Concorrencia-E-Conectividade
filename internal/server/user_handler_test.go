@@ -137,6 +137,57 @@ func TestLoginRejectsWrongPasswordAndDuplicateEmail(t *testing.T) {
 	}
 }
 
+func TestSessionAllowsProfileOnlyAfterLoginAndClearsOnLogout(t *testing.T) {
+	server := newTestServer(t)
+	registration := protocol.CreateUserRequest{
+		Name:     "Lucas Ramos",
+		Email:    "lucas@example.com",
+		Password: "Senha@123",
+		Role:     models.RoleDriver,
+	}
+	if response := sendRequest(t, server, "register_user", registration); response.Success != "success" {
+		t.Fatalf("cadastro deveria funcionar, recebeu: %s", response.Message)
+	}
+
+	session := &Session{}
+	if response := sendRequestWithSession(t, server, session, "get_my_profile", nil); response.Success != "error" {
+		t.Fatalf("perfil sem login deveria falhar, recebeu: %s", response.Message)
+	}
+
+	if response := sendRequestWithSession(t, server, session, "login", protocol.LoginRequest{
+		Email:    registration.Email,
+		Password: registration.Password,
+	}); response.Success != "success" {
+		t.Fatalf("login deveria funcionar, recebeu: %s", response.Message)
+	}
+	if !session.IsAuthenticated() {
+		t.Fatal("login deveria autenticar a sessão")
+	}
+
+	profileResponse := sendRequestWithSession(t, server, session, "get_my_profile", nil)
+	if profileResponse.Success != "success" {
+		t.Fatalf("perfil autenticado deveria funcionar, recebeu: %s", profileResponse.Message)
+	}
+
+	var profile protocol.UserResponse
+	if err := json.Unmarshal(profileResponse.Payload, &profile); err != nil {
+		t.Fatalf("resposta do perfil deveria conter usuário: %v", err)
+	}
+	if profile.Email != registration.Email {
+		t.Errorf("e-mail do perfil = %q, esperado %q", profile.Email, registration.Email)
+	}
+
+	if response := sendRequestWithSession(t, server, session, "logout", nil); response.Success != "success" {
+		t.Fatalf("logout deveria funcionar, recebeu: %s", response.Message)
+	}
+	if session.IsAuthenticated() {
+		t.Fatal("logout deveria limpar a sessão")
+	}
+	if response := sendRequestWithSession(t, server, session, "get_my_profile", nil); response.Success != "error" {
+		t.Fatalf("perfil após logout deveria falhar, recebeu: %s", response.Message)
+	}
+}
+
 func TestRegisterUserPersistsDataAcrossServerRestart(t *testing.T) {
 	usersPath := filepath.Join(t.TempDir(), "data", "users.json")
 	if err := os.MkdirAll(filepath.Dir(usersPath), 0o755); err != nil {
@@ -177,6 +228,10 @@ func TestRegisterUserPersistsDataAcrossServerRestart(t *testing.T) {
 }
 
 func sendRequest(t *testing.T, server *Server, action string, payload any) protocol.Response {
+	return sendRequestWithSession(t, server, &Session{}, action, payload)
+}
+
+func sendRequestWithSession(t *testing.T, server *Server, session *Session, action string, payload any) protocol.Response {
 	t.Helper()
 
 	data, err := json.Marshal(payload)
@@ -184,7 +239,7 @@ func sendRequest(t *testing.T, server *Server, action string, payload any) proto
 		t.Fatalf("serializar payload: %v", err)
 	}
 
-	return server.processRequest(protocol.Request{Action: action, Payload: data})
+	return server.processRequest(protocol.Request{Action: action, Payload: data}, session)
 }
 
 func newTestServer(t *testing.T) *Server {

@@ -157,3 +157,16 @@ func (r *Repository) GetUserByEmail(email string) (*models.User, error) {
 
 	return user, nil
 }
+
+func (r *Repository) GetUserByID(id uuid.UUID) (*models.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, user := range r.users {
+		if user.ID == id {
+			return user, nil
+		}
+	}
+
+	return nil, errors.New("usuário não encontrado")
+}

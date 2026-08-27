@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"io"
 	"net"
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 )
 
 type Server struct {
@@ -54,6 +54,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	reader := bufio.NewReader(conn)
+	session := &Session{}
 
 	for {
 		var request protocol.Request
@@ -69,7 +70,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			return
 		}
 
-		res := s.processRequest(request)
+		res := s.processRequest(request, session)
 
 		if err := protocol.SendJson(conn, res); err != nil {
 			fmt.Printf("Erro ao enviar resposta: %v\n", err)
@@ -78,13 +79,19 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 }
 
-func (s *Server) processRequest(request protocol.Request) protocol.Response {
+func (s *Server) processRequest(request protocol.Request, session *Session) protocol.Response {
 	switch request.Action {
 	case "register_user":
 		return s.handleRegisterUser(request.Payload)
 
 	case "login":
-		return s.handleLogin(request.Payload)
+		return s.handleLogin(request.Payload, session)
+
+	case "get_my_profile":
+		return s.handleGetMyProfile(session)
+
+	case "logout":
+		return s.handleLogout(session)
 
 	default:
 		return protocol.Response{Success: "error", Message: "Ação desconhecida"}

@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
-	"strings"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/utils"
+	"io"
+	"strings"
 )
 
 type TerminalOptions struct {
@@ -45,7 +45,7 @@ func RunTerminal(address string, input *bufio.Reader, output io.Writer, options 
 func connectToServer(address string, input *bufio.Reader, output io.Writer) (*TCPClient, bool, error) {
 	for {
 		utils.ClearTerminal()
-		
+
 		fmt.Fprintf(output, "Tentando conectar ao servidor em %s...\n", address)
 		tcpClient, err := Dial(address)
 
@@ -102,7 +102,9 @@ func runGuestMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, o
 			}
 
 			if loggedIn {
-				authenticatedMenu(input, output, user)
+				if !authenticatedMenu(tcpClient, input, output, user) {
+					return true
+				}
 			}
 		case "0":
 			utils.ClearTerminal()
@@ -203,7 +205,7 @@ func login(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) (protoco
 	return user, true, true
 }
 
-func authenticatedMenu(input *bufio.Reader, output io.Writer, user protocol.UserResponse) {
+func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, user protocol.UserResponse) bool {
 	for {
 		fmt.Fprintf(output, "\n=== Área de %s ===\n", user.Name)
 		fmt.Fprintln(output, "1 - Ver meu perfil")
@@ -218,20 +220,15 @@ func authenticatedMenu(input *bufio.Reader, output io.Writer, user protocol.User
 
 		choice, err := readLine(input, output, "Opção: ")
 		if err != nil {
-			return
+			return true
 		}
 
 		switch choice {
 		case "1":
 			utils.ClearTerminal()
-
-			perfil := "Passageiro"
-
-			if user.Role == models.RoleDriver {
-				perfil = "Motorista"
+			if !showMyProfile(tcpClient, output) {
+				return false
 			}
-
-			fmt.Fprintf(output, "Nome: %s\nE-mail: %s\nPerfil: %s\n", user.Name, user.Email, perfil)
 
 		case "2":
 			utils.ClearTerminal()
@@ -239,15 +236,52 @@ func authenticatedMenu(input *bufio.Reader, output io.Writer, user protocol.User
 
 		case "0":
 			utils.ClearTerminal()
-			fmt.Fprintln(output, "Logout realizado.")
-
-			return
+			if !logout(tcpClient, output) {
+				return false
+			}
+			return true
 
 		default:
 			utils.ClearTerminal()
 			fmt.Fprintln(output, "Opção inválida.")
 		}
 	}
+}
+
+func showMyProfile(tcpClient *TCPClient, output io.Writer) bool {
+	response, err := tcpClient.Send(protocol.Request{Action: "get_my_profile"})
+	if err != nil {
+		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
+		return false
+	}
+	if response.Success != "success" {
+		fmt.Fprintln(output, response.Message)
+		return true
+	}
+
+	var user protocol.UserResponse
+	if err := json.Unmarshal(response.Payload, &user); err != nil {
+		fmt.Fprintln(output, "O servidor retornou uma resposta inválida.")
+		return true
+	}
+
+	profile := "Passageiro"
+	if user.Role == models.RoleDriver {
+		profile = "Motorista"
+	}
+	fmt.Fprintf(output, "Nome: %s\nE-mail: %s\nPerfil: %s\n", user.Name, user.Email, profile)
+	return true
+}
+
+func logout(tcpClient *TCPClient, output io.Writer) bool {
+	response, err := tcpClient.Send(protocol.Request{Action: "logout"})
+	if err != nil {
+		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
+		return false
+	}
+
+	fmt.Fprintln(output, response.Message)
+	return true
 }
 
 func chooseRole(input *bufio.Reader, output io.Writer) models.UserRole {
