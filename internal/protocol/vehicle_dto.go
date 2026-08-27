@@ -1,6 +1,6 @@
-package models
+package protocol
 
-type Vehicle struct {
+type CreateVehicleRequest struct {
 	Plate        string `json:"plate"`
 	Model        string `json:"model"`
 	Color        string `json:"color"`

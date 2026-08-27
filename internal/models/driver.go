@@ -13,15 +13,15 @@ func (d *Driver) RegisterVehicle(vehicle Vehicle) {
 	d.Vehicle = &vehicle
 }
 
-func (d *Driver) UpdateVehicle(plate, model, color string, availableSeats int) error {
-	if d.Vehicle == nil { 
+func (d *Driver) UpdateVehicle(plate, model, color string, seatCapacity int) error {
+	if d.Vehicle == nil {
 		return errors.New("no vehicle registered")
 	}
 
 	d.Vehicle.Plate = plate
 	d.Vehicle.Model = model
 	d.Vehicle.Color = color
-	d.Vehicle.AvailableSeats = availableSeats
+	d.Vehicle.SeatCapacity = seatCapacity
 
 	return nil
 }

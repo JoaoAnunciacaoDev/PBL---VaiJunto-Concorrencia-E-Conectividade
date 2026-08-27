@@ -188,6 +188,69 @@ func TestSessionAllowsProfileOnlyAfterLoginAndClearsOnLogout(t *testing.T) {
 	}
 }
 
+func TestRegisterVehicleRequiresAuthenticatedDriver(t *testing.T) {
+	server := newTestServer(t)
+	driver := protocol.CreateUserRequest{
+		Name:     "Marcos Lima",
+		Email:    "marcos@example.com",
+		Password: "Senha@123",
+		Role:     models.RoleDriver,
+	}
+	passenger := protocol.CreateUserRequest{
+		Name:     "Beatriz Alves",
+		Email:    "beatriz@example.com",
+		Password: "Senha@123",
+		Role:     models.RolePassenger,
+	}
+	for _, user := range []protocol.CreateUserRequest{driver, passenger} {
+		if response := sendRequest(t, server, "register_user", user); response.Success != "success" {
+			t.Fatalf("cadastro deveria funcionar, recebeu: %s", response.Message)
+		}
+	}
+
+	vehicle := protocol.CreateVehicleRequest{
+		Plate:        "abc-1234",
+		Model:        "Hatch",
+		Color:        "Azul",
+		SeatCapacity: 4,
+	}
+	if response := sendRequest(t, server, "register_vehicle", vehicle); response.Success != "error" {
+		t.Fatalf("cadastro sem login deveria falhar, recebeu: %s", response.Message)
+	}
+
+	passengerSession := &Session{}
+	if response := sendRequestWithSession(t, server, passengerSession, "login", protocol.LoginRequest{
+		Email: passenger.Email, Password: passenger.Password,
+	}); response.Success != "success" {
+		t.Fatalf("login de passageiro deveria funcionar, recebeu: %s", response.Message)
+	}
+	if response := sendRequestWithSession(t, server, passengerSession, "register_vehicle", vehicle); response.Success != "error" {
+		t.Fatalf("passageiro não deveria cadastrar veículo, recebeu: %s", response.Message)
+	}
+
+	driverSession := &Session{}
+	if response := sendRequestWithSession(t, server, driverSession, "login", protocol.LoginRequest{
+		Email: driver.Email, Password: driver.Password,
+	}); response.Success != "success" {
+		t.Fatalf("login de motorista deveria funcionar, recebeu: %s", response.Message)
+	}
+	response := sendRequestWithSession(t, server, driverSession, "register_vehicle", vehicle)
+	if response.Success != "success" {
+		t.Fatalf("motorista deveria cadastrar veículo, recebeu: %s", response.Message)
+	}
+
+	storedDriver, err := server.repository.GetDriverByUserID(driverSession.UserID)
+	if err != nil {
+		t.Fatalf("motorista deveria estar salvo: %v", err)
+	}
+	if storedDriver.Vehicle == nil {
+		t.Fatal("motorista deveria possuir veículo")
+	}
+	if storedDriver.Vehicle.Plate != "ABC-1234" {
+		t.Errorf("placa = %q, esperado %q", storedDriver.Vehicle.Plate, "ABC-1234")
+	}
+}
+
 func TestRegisterUserPersistsDataAcrossServerRestart(t *testing.T) {
 	usersPath := filepath.Join(t.TempDir(), "data", "users.json")
 	if err := os.MkdirAll(filepath.Dir(usersPath), 0o755); err != nil {

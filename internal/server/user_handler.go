@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"strings"
-
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"github.com/google/uuid"

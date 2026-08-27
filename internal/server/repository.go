@@ -18,6 +18,7 @@ type Repository struct {
 	mu        sync.RWMutex
 	users     map[string]*models.User
 	usersPath string
+	drivers   map[uuid.UUID]*models.Driver
 }
 
 type storedUser struct {
@@ -32,6 +33,7 @@ func NewRepository(usersPath string) (*Repository, error) {
 	repository := &Repository{
 		users:     make(map[string]*models.User),
 		usersPath: usersPath,
+		drivers:   make(map[uuid.UUID]*models.Driver),
 	}
 
 	if err := repository.loadUsers(); err != nil {
@@ -78,6 +80,7 @@ func (r *Repository) loadUsers() error {
 
 func (r *Repository) saveUsersLocked() error {
 	users := make([]storedUser, 0, len(r.users))
+
 	for _, user := range r.users {
 		users = append(users, storedUser{
 			ID:           user.ID,
@@ -107,6 +110,7 @@ func (r *Repository) saveUsersLocked() error {
 	if err != nil {
 		return fmt.Errorf("criar arquivo temporário: %w", err)
 	}
+
 	temporaryPath := temporaryFile.Name()
 	defer os.Remove(temporaryPath)
 
@@ -142,6 +146,26 @@ func (r *Repository) SaveUser(user *models.User) error {
 	}
 
 	return nil
+}
+
+func (r *Repository) SaveDriver(driver *models.Driver) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.drivers[driver.ID] = driver
+	return nil
+}
+
+func (r *Repository) GetDriverByUserID(userID uuid.UUID) (*models.Driver, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	driver, exists := r.drivers[userID]
+	if !exists {
+		return nil, errors.New("motorista não encontrado")
+	}
+
+	return driver, nil
 }
 
 func (r *Repository) GetUserByEmail(email string) (*models.User, error) {

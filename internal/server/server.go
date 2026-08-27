@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"io"
 	"net"
-	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 )
 
 type Server struct {
@@ -92,6 +92,9 @@ func (s *Server) processRequest(request protocol.Request, session *Session) prot
 
 	case "logout":
 		return s.handleLogout(session)
+
+	case "register_vehicle":
+		return s.handleRegisterVehicle(request.Payload, session)
 
 	default:
 		return protocol.Response{Success: "error", Message: "Ação desconhecida"}
