@@ -6,7 +6,7 @@ import (
 	"net"
 )
 
-func SendJson(conn net.Conn, data interface{}) error {
+func SendJson(conn net.Conn, data any) error {
 	dataJSON, err := json.Marshal(data)
 
 	if err != nil {
@@ -19,7 +19,7 @@ func SendJson(conn net.Conn, data interface{}) error {
 	return err
 }
 
-func ReadJson(reader *bufio.Reader, v interface{}) error {
+func ReadJson(reader *bufio.Reader, v any) error {
 	line, err := reader.ReadBytes('\n')
 
 	if err != nil {

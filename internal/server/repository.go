@@ -45,17 +45,21 @@ func NewRepository(usersPath string) (*Repository, error) {
 
 func (r *Repository) loadUsers() error {
 	content, err := os.ReadFile(r.usersPath)
+
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
+
 	if err != nil {
 		return fmt.Errorf("ler arquivo de usuários: %w", err)
 	}
+
 	if len(content) == 0 {
 		return nil
 	}
 
 	var users []storedUser
+
 	if err := json.Unmarshal(content, &users); err != nil {
 		return fmt.Errorf("interpretar arquivo de usuários: %w", err)
 	}
@@ -96,17 +100,21 @@ func (r *Repository) saveUsersLocked() error {
 	})
 
 	data, err := json.MarshalIndent(users, "", "  ")
+
 	if err != nil {
 		return fmt.Errorf("serializar usuários: %w", err)
 	}
+
 	data = append(data, '\n')
 
 	directory := filepath.Dir(r.usersPath)
+
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return fmt.Errorf("criar diretório de dados: %w", err)
 	}
 
 	temporaryFile, err := os.CreateTemp(directory, ".users-*.tmp")
+
 	if err != nil {
 		return fmt.Errorf("criar arquivo temporário: %w", err)
 	}
@@ -118,9 +126,11 @@ func (r *Repository) saveUsersLocked() error {
 		temporaryFile.Close()
 		return fmt.Errorf("gravar arquivo temporário: %w", err)
 	}
+
 	if err := temporaryFile.Close(); err != nil {
 		return fmt.Errorf("fechar arquivo temporário: %w", err)
 	}
+
 	if err := os.Rename(temporaryPath, r.usersPath); err != nil {
 		return fmt.Errorf("substituir arquivo de usuários: %w", err)
 	}
@@ -140,6 +150,7 @@ func (r *Repository) SaveUser(user *models.User) error {
 	}
 
 	r.users[normalizedEmail] = user
+
 	if err := r.saveUsersLocked(); err != nil {
 		delete(r.users, normalizedEmail)
 		return fmt.Errorf("salvar usuário: %w", err)

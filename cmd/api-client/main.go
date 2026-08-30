@@ -10,11 +10,18 @@ import (
 )
 
 func main() {
-	if err := client.RunTerminal("localhost:8080", bufio.NewReader(os.Stdin), os.Stdout, client.TerminalOptions{
-		Title:              "VaiJunto",
-		DefaultRole:        models.RolePassenger,
-		AllowRoleSelection: true,
-	}); err != nil {
+	err := client.RunTerminal(
+		"localhost:8080",
+		bufio.NewReader(os.Stdin),
+		os.Stdout,
+		client.TerminalOptions{
+			Title:              "VaiJunto",
+			DefaultRole:        models.RolePassenger,
+			AllowRoleSelection: true,
+		},
+	)
+
+	if err != nil {
 		log.Fatal(err)
 	}
 }

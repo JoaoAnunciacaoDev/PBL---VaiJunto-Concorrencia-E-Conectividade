@@ -28,12 +28,14 @@ func (s *Server) handleRegisterUser(payload json.RawMessage) protocol.Response {
 			Message: "Nome é obrigatório.",
 		}
 	}
+
 	if !isValidEmail(email) {
 		return protocol.Response{
 			Success: "error",
 			Message: "E-mail inválido.",
 		}
 	}
+
 	if !isValidPassword(dto.Password) {
 		return protocol.Response{
 			Success: "error",
@@ -42,6 +44,7 @@ func (s *Server) handleRegisterUser(payload json.RawMessage) protocol.Response {
 	}
 
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(dto.Password), bcrypt.DefaultCost)
+
 	if err != nil {
 		return protocol.Response{
 			Success: "error",

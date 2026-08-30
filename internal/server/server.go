@@ -56,7 +56,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	session := NewSession()
 	remoteAddress := conn.RemoteAddr().String()
+
 	log.Printf("connection opened remote=%s session=%s", remoteAddress, session.ID)
+
 	defer func() {
 		log.Printf("connection closed remote=%s session=%s user=%q", remoteAddress, session.ID, session.UserName)
 		conn.Close()
@@ -78,12 +80,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		userName := session.UserName
 		res := s.processRequest(request, session)
+
 		if userName == "" {
 			userName = "anonymous"
 			if session.UserName != "" {
 				userName = session.UserName
 			}
 		}
+
 		log.Printf("request action=%s session=%s user=%q result=%s", request.Action, session.ID, userName, res.Success)
 
 		if err := protocol.SendJson(conn, res); err != nil {

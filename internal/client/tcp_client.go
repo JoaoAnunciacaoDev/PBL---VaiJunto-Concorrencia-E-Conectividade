@@ -32,7 +32,7 @@ func (c *TCPClient) Send(request protocol.Request) (protocol.Response, error) {
 	}
 
 	var response protocol.Response
-	
+
 	if err := protocol.ReadJson(c.reader, &response); err != nil {
 		return protocol.Response{}, fmt.Errorf("ler resposta: %w", err)
 	}

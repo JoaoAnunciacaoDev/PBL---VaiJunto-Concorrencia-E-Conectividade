@@ -1,20 +1,20 @@
 package utils
 
 import (
-    "os"
-    "os/exec"
-    "runtime"
+	"os"
+	"os/exec"
+	"runtime"
 )
 
 func ClearTerminal() {
-    var cmd *exec.Cmd
+	var cmd *exec.Cmd
 
-    if runtime.GOOS == "windows" {
-        cmd = exec.Command("cmd", "/c", "cls")
-    } else {
-        cmd = exec.Command("clear")
-    }
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/c", "cls")
+	} else {
+		cmd = exec.Command("clear")
+	}
 
-    cmd.Stdout = os.Stdout
-    cmd.Run()
+	cmd.Stdout = os.Stdout
+	cmd.Run()
 }

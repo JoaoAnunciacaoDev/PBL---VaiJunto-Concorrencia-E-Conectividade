@@ -10,19 +10,23 @@ import (
 
 func (s *Server) handleRegisterVehicle(payload json.RawMessage, session *Session) protocol.Response {
 	driver, response, ok := s.driverForSession(session, false)
+
 	if !ok {
 		return response
 	}
+
 	if driver.HasVehicle() {
 		return protocol.Response{Success: "error", Message: "O motorista já possui um veículo cadastrado."}
 	}
 
 	vehicle, response, ok := vehicleFromPayload(payload)
+
 	if !ok {
 		return response
 	}
 
 	driver.RegisterVehicle(vehicle)
+
 	if err := s.repository.SaveDriver(driver); err != nil {
 		return protocol.Response{Success: "error", Message: "Não foi possível cadastrar o veículo."}
 	}
@@ -32,6 +36,7 @@ func (s *Server) handleRegisterVehicle(payload json.RawMessage, session *Session
 
 func (s *Server) handleGetMyVehicle(session *Session) protocol.Response {
 	driver, response, ok := s.driverForSession(session, true)
+
 	if !ok {
 		return response
 	}
@@ -41,11 +46,13 @@ func (s *Server) handleGetMyVehicle(session *Session) protocol.Response {
 
 func (s *Server) handleUpdateVehicle(payload json.RawMessage, session *Session) protocol.Response {
 	driver, response, ok := s.driverForSession(session, true)
+
 	if !ok {
 		return response
 	}
 
 	vehicle, response, ok := vehicleFromPayload(payload)
+
 	if !ok {
 		return response
 	}
@@ -53,6 +60,7 @@ func (s *Server) handleUpdateVehicle(payload json.RawMessage, session *Session) 
 	if err := driver.UpdateVehicle(vehicle.Plate, vehicle.Model, vehicle.Color, vehicle.SeatCapacity); err != nil {
 		return protocol.Response{Success: "error", Message: "Não foi possível atualizar o veículo."}
 	}
+
 	if err := s.repository.SaveDriver(driver); err != nil {
 		return protocol.Response{Success: "error", Message: "Não foi possível atualizar o veículo."}
 	}
@@ -62,11 +70,13 @@ func (s *Server) handleUpdateVehicle(payload json.RawMessage, session *Session) 
 
 func (s *Server) handleRemoveVehicle(session *Session) protocol.Response {
 	driver, response, ok := s.driverForSession(session, true)
+
 	if !ok {
 		return response
 	}
 
 	driver.RemoveVehicle()
+
 	if err := s.repository.SaveDriver(driver); err != nil {
 		return protocol.Response{Success: "error", Message: "Não foi possível remover o veículo."}
 	}
@@ -80,21 +90,25 @@ func (s *Server) driverForSession(session *Session, requiresVehicle bool) (*mode
 	}
 
 	user, err := s.repository.GetUserByID(session.UserID)
+
 	if err != nil {
 		session.Clear()
 		return nil, protocol.Response{Success: "error", Message: "Sessão inválida. Faça login novamente."}, false
 	}
+
 	if !user.IsDriver() {
 		return nil, protocol.Response{Success: "error", Message: "Apenas motoristas podem gerenciar veículos."}, false
 	}
 
 	driver, err := s.repository.GetDriverByUserID(user.ID)
+
 	if err != nil {
 		if requiresVehicle {
 			return nil, protocol.Response{Success: "error", Message: "Nenhum veículo cadastrado."}, false
 		}
 		return &models.Driver{User: *user}, protocol.Response{}, true
 	}
+
 	if requiresVehicle && !driver.HasVehicle() {
 		return nil, protocol.Response{Success: "error", Message: "Nenhum veículo cadastrado."}, false
 	}
@@ -104,6 +118,7 @@ func (s *Server) driverForSession(session *Session, requiresVehicle bool) (*mode
 
 func vehicleFromPayload(payload json.RawMessage) (models.Vehicle, protocol.Response, bool) {
 	var dto protocol.CreateVehicleRequest
+
 	if err := json.Unmarshal(payload, &dto); err != nil {
 		return models.Vehicle{}, protocol.Response{Success: "error", Message: "Requisição inválida: " + err.Error()}, false
 	}
@@ -114,8 +129,12 @@ func vehicleFromPayload(payload json.RawMessage) (models.Vehicle, protocol.Respo
 		Color:        strings.TrimSpace(dto.Color),
 		SeatCapacity: dto.SeatCapacity,
 	}
+
 	if vehicle.Plate == "" || vehicle.Model == "" || vehicle.Color == "" || vehicle.SeatCapacity <= 0 {
-		return models.Vehicle{}, protocol.Response{Success: "error", Message: "Placa, modelo, cor e capacidade maior que zero são obrigatórios."}, false
+		return models.Vehicle{}, protocol.Response{
+				Success: "error",
+				Message: "Placa, modelo, cor e capacidade maior que zero são obrigatórios."},
+			false
 	}
 
 	return vehicle, protocol.Response{}, true
@@ -123,6 +142,7 @@ func vehicleFromPayload(payload json.RawMessage) (models.Vehicle, protocol.Respo
 
 func vehicleResponse(vehicle models.Vehicle, message string) protocol.Response {
 	data, err := json.Marshal(vehicle)
+
 	if err != nil {
 		return protocol.Response{Success: "error", Message: "Não foi possível processar a resposta."}
 	}
