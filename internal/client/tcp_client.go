@@ -1,7 +1,7 @@
 package client
 
 import (
-	"bufio"
+	"encoding/json"
 	"fmt"
 	"net"
 
@@ -9,8 +9,9 @@ import (
 )
 
 type TCPClient struct {
-	conn   net.Conn
-	reader *bufio.Reader
+	conn    net.Conn
+	encoder *json.Encoder
+	decoder *json.Decoder
 }
 
 func Dial(address string) (*TCPClient, error) {
@@ -21,19 +22,20 @@ func Dial(address string) (*TCPClient, error) {
 	}
 
 	return &TCPClient{
-		conn:   conn,
-		reader: bufio.NewReader(conn),
+		conn:    conn,
+		encoder: json.NewEncoder(conn),
+		decoder: json.NewDecoder(conn),
 	}, nil
 }
 
 func (c *TCPClient) Send(request protocol.Request) (protocol.Response, error) {
-	if err := protocol.SendJson(c.conn, request); err != nil {
+	if err := protocol.SendJson(c.encoder, request); err != nil {
 		return protocol.Response{}, fmt.Errorf("enviar requisição: %w", err)
 	}
 
 	var response protocol.Response
 
-	if err := protocol.ReadJson(c.reader, &response); err != nil {
+	if err := protocol.ReadJson(c.decoder, &response); err != nil {
 		return protocol.Response{}, fmt.Errorf("ler resposta: %w", err)
 	}
 

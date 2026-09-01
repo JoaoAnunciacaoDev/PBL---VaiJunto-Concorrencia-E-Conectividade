@@ -1,30 +1,13 @@
 package protocol
 
 import (
-	"bufio"
 	"encoding/json"
-	"net"
 )
 
-func SendJson(conn net.Conn, data any) error {
-	dataJSON, err := json.Marshal(data)
-
-	if err != nil {
-		return err
-	}
-
-	dataJSON = append(dataJSON, '\n')
-	_, err = conn.Write(dataJSON)
-
-	return err
+func SendJson(encoder *json.Encoder, data any) error {
+	return encoder.Encode(data)
 }
 
-func ReadJson(reader *bufio.Reader, v any) error {
-	line, err := reader.ReadBytes('\n')
-
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(line, v)
+func ReadJson(decoder *json.Decoder, v any) error {
+	return decoder.Decode(v)
 }

@@ -1,7 +1,7 @@
 package server
 
 import (
-	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -53,7 +53,8 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
-	reader := bufio.NewReader(conn)
+	decoder := json.NewDecoder(conn)
+	encoder := json.NewEncoder(conn)
 	session := NewSession()
 	remoteAddress := conn.RemoteAddr().String()
 
@@ -66,7 +67,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	for {
 		var request protocol.Request
-		err := protocol.ReadJson(reader, &request)
+		err := protocol.ReadJson(decoder, &request)
 
 		if err != nil {
 			if errors.Is(err, io.EOF) {
@@ -90,7 +91,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		log.Printf("request action=%s session=%s user=%q result=%s", request.Action, session.ID, userName, res.Success)
 
-		if err := protocol.SendJson(conn, res); err != nil {
+		if err := protocol.SendJson(encoder, res); err != nil {
 			log.Printf("response send failed remote=%s session=%s user=%q error=%v", remoteAddress, session.ID, userName, err)
 			return
 		}
