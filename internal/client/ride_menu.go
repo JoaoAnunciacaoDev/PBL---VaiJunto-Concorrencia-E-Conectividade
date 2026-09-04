@@ -23,6 +23,7 @@ func rideMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) MenuR
 		fmt.Fprintln(output, "1 - Publicar carona")
 		fmt.Fprintln(output, "2 - Minhas caronas")
 		fmt.Fprintln(output, "3 - Cancelar carona")
+		fmt.Fprintln(output, "4 - Passageiros por trecho")
 		fmt.Fprintln(output, "0 - Voltar")
 
 		choice, err := readLine(input, output, "Opção: ")
@@ -44,6 +45,11 @@ func rideMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) MenuR
 		case "3":
 			utils.ClearTerminal()
 			if !cancelRide(tcpClient, input, output) {
+				return MenuDisconnected
+			}
+		case "4":
+			utils.ClearTerminal()
+			if !listRidePassengers(tcpClient, input, output) {
 				return MenuDisconnected
 			}
 		case "0":
@@ -213,6 +219,57 @@ func cancelRide(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) boo
 	}
 
 	fmt.Fprintln(output, response.Message)
+	return true
+}
+
+func listRidePassengers(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
+	rideIDText, err := readLine(input, output, "ID da carona: ")
+	if err != nil {
+		fmt.Fprintln(output, "Não foi possível ler o ID da carona.")
+		return true
+	}
+
+	rideID, err := uuid.Parse(rideIDText)
+	if err != nil {
+		fmt.Fprintln(output, "ID da carona inválido.")
+		return true
+	}
+
+	payload, err := json.Marshal(protocol.GetRidePassengersRequest{RideID: rideID})
+	if err != nil {
+		fmt.Fprintln(output, "Não foi possível preparar a consulta.")
+		return true
+	}
+
+	response, err := tcpClient.Send(protocol.Request{Action: "get_ride_passengers", Payload: payload})
+	if err != nil {
+		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
+		return false
+	}
+	if response.Success != "success" {
+		fmt.Fprintln(output, response.Message)
+		return true
+	}
+
+	var result protocol.RidePassengersResponse
+	if err := json.Unmarshal(response.Payload, &result); err != nil {
+		fmt.Fprintln(output, "O servidor retornou uma resposta inválida.")
+		return true
+	}
+
+	fmt.Fprintln(output, response.Message)
+	for index, segment := range result.Segments {
+		fmt.Fprintf(output, "\n%d. %s → %s (%s até %s)\n", index+1, segment.Origin, segment.Destination,
+			segment.DepartureAt.Format(rideDateTimeLayout), segment.ArrivalAt.Format(rideDateTimeLayout))
+		if len(segment.Passengers) == 0 {
+			fmt.Fprintln(output, "Nenhum passageiro confirmado neste trecho.")
+			continue
+		}
+		for _, passenger := range segment.Passengers {
+			fmt.Fprintf(output, "- %s <%s>\n", passenger.Name, passenger.Email)
+		}
+	}
+
 	return true
 }
 

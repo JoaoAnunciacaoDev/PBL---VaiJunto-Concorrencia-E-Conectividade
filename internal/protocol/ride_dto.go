@@ -26,6 +26,26 @@ type CancelRideRequest struct {
 	RideID uuid.UUID `json:"ride_id"`
 }
 
+type GetRidePassengersRequest struct {
+	RideID uuid.UUID `json:"ride_id"`
+}
+
+// RidePassengersResponse organiza os passageiros confirmados por trecho da
+// carona. Apenas dados públicos do passageiro são enviados ao motorista.
+type RidePassengersResponse struct {
+	RideID   uuid.UUID                       `json:"ride_id"`
+	Segments []RideSegmentPassengersResponse `json:"segments"`
+}
+
+type RideSegmentPassengersResponse struct {
+	SegmentID   uuid.UUID      `json:"segment_id"`
+	Origin      enum.City      `json:"origin"`
+	Destination enum.City      `json:"destination"`
+	DepartureAt time.Time      `json:"departure_at"`
+	ArrivalAt   time.Time      `json:"arrival_at"`
+	Passengers  []UserResponse `json:"passengers"`
+}
+
 type SearchItinerariesRequest struct {
 	Origin      enum.City `json:"origin"`
 	Destination enum.City `json:"destination"`

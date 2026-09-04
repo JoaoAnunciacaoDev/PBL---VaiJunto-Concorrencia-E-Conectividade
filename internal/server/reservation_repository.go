@@ -115,6 +115,49 @@ func (r *Repository) GetReservationsByPassengerID(passengerID uuid.UUID) ([]*mod
 	return reservations, nil
 }
 
+// GetConfirmedPassengerIDsByRideID returns each passenger only once per
+// segment. Canceled reservations are deliberately excluded.
+func (r *Repository) GetConfirmedPassengerIDsByRideID(rideID uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if _, exists := r.rides[rideID]; !exists {
+		return nil, errors.New("carona não encontrada")
+	}
+
+	passengersBySegment := make(map[uuid.UUID][]uuid.UUID)
+	seenPassengers := make(map[uuid.UUID]map[uuid.UUID]struct{})
+	for _, reservation := range r.reservations {
+		if reservation.Status != enum.Confirmada {
+			continue
+		}
+
+		for _, reservedSegment := range reservation.Segments {
+			if reservedSegment.RideID != rideID {
+				continue
+			}
+
+			if seenPassengers[reservedSegment.SegmentID] == nil {
+				seenPassengers[reservedSegment.SegmentID] = make(map[uuid.UUID]struct{})
+			}
+			if _, exists := seenPassengers[reservedSegment.SegmentID][reservation.PassengerID]; exists {
+				continue
+			}
+
+			seenPassengers[reservedSegment.SegmentID][reservation.PassengerID] = struct{}{}
+			passengersBySegment[reservedSegment.SegmentID] = append(passengersBySegment[reservedSegment.SegmentID], reservation.PassengerID)
+		}
+	}
+
+	for segmentID := range passengersBySegment {
+		sort.Slice(passengersBySegment[segmentID], func(i, j int) bool {
+			return passengersBySegment[segmentID][i].String() < passengersBySegment[segmentID][j].String()
+		})
+	}
+
+	return passengersBySegment, nil
+}
+
 func (r *Repository) CancelReservation(reservationID, passengerID uuid.UUID) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

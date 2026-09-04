@@ -133,6 +133,9 @@ func (s *Server) processRequest(request protocol.Request, session *Session) prot
 	case "cancel_ride":
 		return s.handleCancelRide(request.Payload, session)
 
+	case "get_ride_passengers":
+		return s.handleGetRidePassengers(request.Payload, session)
+
 	case "search_itineraries":
 		return s.handleSearchItineraries(request.Payload, session)
 

@@ -72,6 +72,47 @@ func TestDriverCanCreateListAndCancelRide(t *testing.T) {
 		t.Fatalf("lista de caronas incorreta: %+v", rides)
 	}
 
+	passengerRegistration := protocol.CreateUserRequest{
+		Name:     "Paulo Passageiro",
+		Email:    "paulo.passageiro@example.com",
+		Password: "Senha@123",
+		Role:     models.RolePassenger,
+	}
+	if response := sendRequest(t, server, "register_user", passengerRegistration); response.Success != "success" {
+		t.Fatalf("cadastro do passageiro deveria funcionar: %s", response.Message)
+	}
+
+	passengerSession := &Session{}
+	if response := sendRequestWithSession(t, server, passengerSession, "login", protocol.LoginRequest{
+		Email: passengerRegistration.Email, Password: passengerRegistration.Password,
+	}); response.Success != "success" {
+		t.Fatalf("login do passageiro deveria funcionar: %s", response.Message)
+	}
+	if response := sendRequestWithSession(t, server, passengerSession, "confirm_reservation", protocol.ConfirmReservationRequest{
+		Segments: []models.ReservedSegment{{RideID: createdRide.ID, SegmentID: createdRide.Segments[0].ID}},
+	}); response.Success != "success" {
+		t.Fatalf("reserva deveria funcionar: %s", response.Message)
+	}
+
+	passengersResponse := sendRequestWithSession(t, server, session, "get_ride_passengers", protocol.GetRidePassengersRequest{RideID: createdRide.ID})
+	if passengersResponse.Success != "success" {
+		t.Fatalf("consulta de passageiros deveria funcionar: %s", passengersResponse.Message)
+	}
+
+	var passengers protocol.RidePassengersResponse
+	if err := json.Unmarshal(passengersResponse.Payload, &passengers); err != nil {
+		t.Fatalf("resposta deveria conter passageiros por trecho: %v", err)
+	}
+	if len(passengers.Segments) != 2 {
+		t.Fatalf("trechos retornados = %d, esperado 2", len(passengers.Segments))
+	}
+	if got := passengers.Segments[0].Passengers; len(got) != 1 || got[0].Email != passengerRegistration.Email {
+		t.Fatalf("passageiros do primeiro trecho incorretos: %+v", got)
+	}
+	if got := passengers.Segments[1].Passengers; len(got) != 0 {
+		t.Fatalf("segundo trecho não deveria ter passageiros: %+v", got)
+	}
+
 	cancelResponse := sendRequestWithSession(t, server, session, "cancel_ride", protocol.CancelRideRequest{RideID: createdRide.ID})
 	if cancelResponse.Success != "success" {
 		t.Fatalf("cancelamento deveria funcionar: %s", cancelResponse.Message)
