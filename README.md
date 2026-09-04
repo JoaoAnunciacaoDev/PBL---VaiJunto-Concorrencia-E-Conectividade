@@ -143,6 +143,8 @@ Algumas ações do protocolo são `register_user`, `login`, `logout`, `register_
 
 Uma sessão existe apenas no servidor e está associada a uma conexão TCP. Depois do login, o servidor associa aquele usuário à conexão; outra conexão recebe outra sessão. Ao fechar a conexão ou fazer logout, a sessão deixa de estar autenticada.
 
+O catálogo completo das ações, payloads e respostas está em [PROTOCOL.md](PROTOCOL.md).
+
 ## Testes
 
 Execute todos os testes automatizados com:
