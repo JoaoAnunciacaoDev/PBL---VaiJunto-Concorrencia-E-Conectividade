@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/utils"
+	"github.com/google/uuid"
 )
 
 const searchDateLayout = "02/01/2006"
@@ -17,6 +21,8 @@ func passengerMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) 
 	for {
 		fmt.Fprintln(output, "\n=== Terminal do Passageiro ===")
 		fmt.Fprintln(output, "1 - Buscar itinerários")
+		fmt.Fprintln(output, "2 - Minhas reservas")
+		fmt.Fprintln(output, "3 - Cancelar reserva")
 		fmt.Fprintln(output, "0 - Voltar")
 
 		choice, err := readLine(input, output, "Opção: ")
@@ -28,6 +34,16 @@ func passengerMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) 
 		case "1":
 			utils.ClearTerminal()
 			if !searchItineraries(tcpClient, input, output) {
+				return MenuDisconnected
+			}
+		case "2":
+			utils.ClearTerminal()
+			if !listMyReservations(tcpClient, output) {
+				return MenuDisconnected
+			}
+		case "3":
+			utils.ClearTerminal()
+			if !cancelReservation(tcpClient, input, output) {
 				return MenuDisconnected
 			}
 		case "0":
@@ -47,7 +63,6 @@ func searchItineraries(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 	if !ok {
 		return true
 	}
-
 	dateText, err := readLine(input, output, "Data da viagem (dd/mm/aaaa): ")
 	if err != nil {
 		fmt.Fprintln(output, "Não foi possível ler a data.")
@@ -59,16 +74,11 @@ func searchItineraries(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 		return true
 	}
 
-	payload, err := json.Marshal(protocol.SearchItinerariesRequest{
-		Origin:      origin,
-		Destination: destination,
-		Date:        date,
-	})
+	payload, err := json.Marshal(protocol.SearchItinerariesRequest{Origin: origin, Destination: destination, Date: date})
 	if err != nil {
 		fmt.Fprintln(output, "Não foi possível preparar a busca.")
 		return true
 	}
-
 	response, err := tcpClient.Send(protocol.Request{Action: "search_itineraries", Payload: payload})
 	if err != nil {
 		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
@@ -91,19 +101,107 @@ func searchItineraries(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 
 	fmt.Fprintln(output, response.Message)
 	for index, itinerary := range itineraries {
-		fmt.Fprintf(output, "\n=== Itinerário %d ===\n", index+1)
-		fmt.Fprintf(output, "Partida: %s\nChegada: %s\n", itinerary.DepartureAt.Format(rideDateTimeLayout), itinerary.ArrivalAt.Format(rideDateTimeLayout))
-		for _, segment := range itinerary.Segments {
-			fmt.Fprintf(output, "%s → %s | %s até %s | %s\n",
-				segment.Origin,
-				segment.Destination,
-				segment.DepartureAt.Format(rideDateTimeLayout),
-				segment.ArrivalAt.Format(rideDateTimeLayout),
-				formatCents(segment.PriceCents),
-			)
-		}
-		fmt.Fprintf(output, "Preço total: %s\n", formatCents(itinerary.TotalPriceCents))
+		printItinerary(output, index+1, itinerary)
 	}
+	choiceText, err := readLine(input, output, "Número do itinerário para confirmar ou 0 para voltar: ")
+	if err != nil {
+		return true
+	}
+	choice, err := strconv.Atoi(choiceText)
+	if err != nil || choice < 0 || choice > len(itineraries) {
+		fmt.Fprintln(output, "Opção inválida.")
+		return true
+	}
+	if choice == 0 {
+		return true
+	}
+	return confirmItinerary(tcpClient, input, output, itineraries[choice-1])
+}
 
+func confirmItinerary(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, itinerary protocol.ItineraryResponse) bool {
+	confirmation, err := readLine(input, output, "Confirmar reserva? (s/N): ")
+	if err != nil || strings.ToLower(confirmation) != "s" {
+		fmt.Fprintln(output, "Reserva cancelada.")
+		return true
+	}
+	segments := make([]models.ReservedSegment, 0, len(itinerary.Segments))
+	for _, segment := range itinerary.Segments {
+		segments = append(segments, models.ReservedSegment{RideID: segment.RideID, SegmentID: segment.SegmentID})
+	}
+	payload, err := json.Marshal(protocol.ConfirmReservationRequest{Segments: segments})
+	if err != nil {
+		return true
+	}
+	response, err := tcpClient.Send(protocol.Request{Action: "confirm_reservation", Payload: payload})
+	if err != nil {
+		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
+		return false
+	}
+	if response.Success != "success" {
+		fmt.Fprintln(output, response.Message)
+		return true
+	}
+	var reservation models.Reservation
+	if err := json.Unmarshal(response.Payload, &reservation); err != nil {
+		fmt.Fprintln(output, "O servidor retornou uma resposta inválida.")
+		return true
+	}
+	fmt.Fprintf(output, "%s ID da reserva: %s\n", response.Message, reservation.ID)
 	return true
+}
+
+func listMyReservations(tcpClient *TCPClient, output io.Writer) bool {
+	response, err := tcpClient.Send(protocol.Request{Action: "list_my_reservations"})
+	if err != nil {
+		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
+		return false
+	}
+	if response.Success != "success" {
+		fmt.Fprintln(output, response.Message)
+		return true
+	}
+	var reservations []models.Reservation
+	if err := json.Unmarshal(response.Payload, &reservations); err != nil {
+		fmt.Fprintln(output, "O servidor retornou uma resposta inválida.")
+		return true
+	}
+	if len(reservations) == 0 {
+		fmt.Fprintln(output, "Você ainda não possui reservas.")
+		return true
+	}
+	for _, reservation := range reservations {
+		fmt.Fprintf(output, "\nID: %s\nStatus: %s\nTrechos: %d\n", reservation.ID, reservation.Status, len(reservation.Segments))
+	}
+	return true
+}
+
+func cancelReservation(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
+	reservationIDText, err := readLine(input, output, "ID da reserva: ")
+	if err != nil {
+		return true
+	}
+	reservationID, err := uuid.Parse(reservationIDText)
+	if err != nil {
+		fmt.Fprintln(output, "ID da reserva inválido.")
+		return true
+	}
+	payload, err := json.Marshal(protocol.CancelReservationRequest{ReservationID: reservationID})
+	if err != nil {
+		return true
+	}
+	response, err := tcpClient.Send(protocol.Request{Action: "cancel_reservation", Payload: payload})
+	if err != nil {
+		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
+		return false
+	}
+	fmt.Fprintln(output, response.Message)
+	return true
+}
+
+func printItinerary(output io.Writer, index int, itinerary protocol.ItineraryResponse) {
+	fmt.Fprintf(output, "\n=== Itinerário %d ===\nPartida: %s\nChegada: %s\n", index, itinerary.DepartureAt.Format(rideDateTimeLayout), itinerary.ArrivalAt.Format(rideDateTimeLayout))
+	for _, segment := range itinerary.Segments {
+		fmt.Fprintf(output, "%s → %s | %s até %s | %s\n", segment.Origin, segment.Destination, segment.DepartureAt.Format(rideDateTimeLayout), segment.ArrivalAt.Format(rideDateTimeLayout), formatCents(segment.PriceCents))
+	}
+	fmt.Fprintf(output, "Preço total: %s\n", formatCents(itinerary.TotalPriceCents))
 }

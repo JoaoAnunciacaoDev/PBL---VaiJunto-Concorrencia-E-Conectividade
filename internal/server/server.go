@@ -136,6 +136,15 @@ func (s *Server) processRequest(request protocol.Request, session *Session) prot
 	case "search_itineraries":
 		return s.handleSearchItineraries(request.Payload, session)
 
+	case "confirm_reservation":
+		return s.handleConfirmReservation(request.Payload, session)
+
+	case "list_my_reservations":
+		return s.handleListMyReservations(session)
+
+	case "cancel_reservation":
+		return s.handleCancelReservation(request.Payload, session)
+
 	default:
 		return protocol.Response{Success: "error", Message: "Ação desconhecida"}
 	}

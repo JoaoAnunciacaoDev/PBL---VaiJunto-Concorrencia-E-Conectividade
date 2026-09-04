@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/google/uuid"
 )
 
@@ -47,4 +48,12 @@ type ItinerarySegmentResponse struct {
 	ArrivalAt      time.Time `json:"arrival_at"`
 	PriceCents     int       `json:"price_cents"`
 	AvailableSeats int       `json:"available_seats"`
+}
+
+type ConfirmReservationRequest struct {
+	Segments []models.ReservedSegment `json:"segments"`
+}
+
+type CancelReservationRequest struct {
+	ReservationID uuid.UUID `json:"reservation_id"`
 }
