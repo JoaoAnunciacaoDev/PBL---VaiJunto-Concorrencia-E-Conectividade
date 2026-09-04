@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/google/uuid"
 )
@@ -129,10 +130,31 @@ func (r *Repository) CancelRide(rideID, driverID uuid.UUID) error {
 		return errors.New("carona já está cancelada")
 	}
 
+	affectedReservations, err := r.confirmedReservationsForRideLocked(rideID)
+	if err != nil {
+		return fmt.Errorf("cancelar reservas da carona: %w", err)
+	}
+
 	ride.Cancel()
+	for _, affected := range affectedReservations {
+		affected.reservation.Status = enum.Cancelada
+		for _, stage := range affected.stages {
+			stage.stage.AvailableSeats++
+		}
+	}
+
 	if err := r.saveRidesLocked(); err != nil {
-		ride.Cancelled = false
+		r.restoreRideCancellation(ride, affectedReservations)
 		return fmt.Errorf("cancelar carona: %w", err)
+	}
+	if err := r.saveReservationsLocked(); err != nil {
+		r.restoreRideCancellation(ride, affectedReservations)
+		// A escrita de cada arquivo é atômica, mas rides.json já foi salvo. Esta
+		// segunda escrita restaura o arquivo para o mesmo estado da memória.
+		if restoreErr := r.saveRidesLocked(); restoreErr != nil {
+			return fmt.Errorf("cancelar carona e restaurar estado: %w", restoreErr)
+		}
+		return fmt.Errorf("salvar cancelamento das reservas: %w", err)
 	}
 
 	return nil

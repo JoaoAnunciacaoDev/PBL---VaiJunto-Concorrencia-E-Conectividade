@@ -201,6 +201,49 @@ type reservedStage struct {
 	stage  *models.Stage
 }
 
+type affectedReservation struct {
+	reservation *models.Reservation
+	stages      []reservedStage
+}
+
+// confirmedReservationsForRideLocked gathers every valid confirmed reservation
+// that uses the ride. It validates all data before changing any seat or status.
+func (r *Repository) confirmedReservationsForRideLocked(rideID uuid.UUID) ([]affectedReservation, error) {
+	affected := make([]affectedReservation, 0)
+	for _, reservation := range r.reservations {
+		if reservation.Status != enum.Confirmada || !reservationContainsRide(reservation, rideID) {
+			continue
+		}
+
+		stages, err := r.reservedStagesLocked(reservation.Segments)
+		if err != nil {
+			return nil, fmt.Errorf("reserva %s inválida: %w", reservation.ID, err)
+		}
+		affected = append(affected, affectedReservation{reservation: reservation, stages: stages})
+	}
+
+	return affected, nil
+}
+
+func reservationContainsRide(reservation *models.Reservation, rideID uuid.UUID) bool {
+	for _, segment := range reservation.Segments {
+		if segment.RideID == rideID {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Repository) restoreRideCancellation(ride *models.Ride, affected []affectedReservation) {
+	ride.Cancelled = false
+	for _, item := range affected {
+		item.reservation.Status = enum.Confirmada
+		for _, stage := range item.stages {
+			stage.stage.AvailableSeats--
+		}
+	}
+}
+
 func (r *Repository) reservedStagesLocked(segments []models.ReservedSegment) ([]reservedStage, error) {
 	stages := make([]reservedStage, 0, len(segments))
 	seen := make(map[models.ReservedSegment]struct{}, len(segments))
