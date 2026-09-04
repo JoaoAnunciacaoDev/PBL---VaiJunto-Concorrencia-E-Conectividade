@@ -91,6 +91,25 @@ func createRide(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) boo
 			return true
 		}
 
+		segmentDepartureAt := departureAt
+		if index == 0 {
+			fmt.Fprintf(output, "Saída do primeiro trecho: %s\n", departureAt.Format(rideDateTimeLayout))
+		} else {
+			segmentDepartureAt, ok = readDateTime(input, output, "Data e horário de saída do trecho (dd/mm/aaaa hh:mm): ")
+			if !ok {
+				return true
+			}
+		}
+
+		segmentArrivalAt, ok := readDateTime(input, output, "Data e horário de chegada do trecho (dd/mm/aaaa hh:mm): ")
+		if !ok {
+			return true
+		}
+		if !segmentArrivalAt.After(segmentDepartureAt) {
+			fmt.Fprintln(output, "A chegada deve ocorrer depois da saída do trecho.")
+			return true
+		}
+
 		priceCents, ok := readNonNegativeInt(input, output, "Preço em centavos (ex.: 2550 para R$ 25,50): ")
 		if !ok {
 			return true
@@ -103,6 +122,8 @@ func createRide(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) boo
 		segments = append(segments, protocol.CreateStageRequest{
 			Origin:         origin,
 			Destination:    destination,
+			DepartureAt:    segmentDepartureAt,
+			ArrivalAt:      segmentArrivalAt,
 			PriceCents:     priceCents,
 			AvailableSeats: availableSeats,
 		})
@@ -234,6 +255,22 @@ func readPositiveInt(input *bufio.Reader, output io.Writer, prompt string) (int,
 	return value, true
 }
 
+func readDateTime(input *bufio.Reader, output io.Writer, prompt string) (time.Time, bool) {
+	text, err := readLine(input, output, prompt)
+	if err != nil {
+		fmt.Fprintln(output, "Não foi possível ler a data e horário.")
+		return time.Time{}, false
+	}
+
+	dateTime, err := time.ParseInLocation(rideDateTimeLayout, text, time.Local)
+	if err != nil {
+		fmt.Fprintln(output, "Data e horário inválidos.")
+		return time.Time{}, false
+	}
+
+	return dateTime, true
+}
+
 func readNonNegativeInt(input *bufio.Reader, output io.Writer, prompt string) (int, bool) {
 	text, err := readLine(input, output, prompt)
 	if err != nil {
@@ -258,10 +295,12 @@ func printRide(output io.Writer, ride models.Ride) {
 
 	fmt.Fprintf(output, "\nID: %s\nPartida: %s\nStatus: %s\n", ride.ID, ride.DepartureAt.Format(rideDateTimeLayout), status)
 	for index, segment := range ride.Segments {
-		fmt.Fprintf(output, "%d. %s → %s | %s | %d assento(s) disponível(is)\n",
+		fmt.Fprintf(output, "%d. %s → %s | %s até %s | %s | %d assento(s) disponível(is)\n",
 			index+1,
 			segment.Origin,
 			segment.Destination,
+			segment.DepartureAt.Format(rideDateTimeLayout),
+			segment.ArrivalAt.Format(rideDateTimeLayout),
 			formatCents(segment.PriceCents),
 			segment.AvailableSeats,
 		)

@@ -39,7 +39,7 @@ func TestRepositoryPersistsDriverVehicleAndRide(t *testing.T) {
 		DriverID:    user.ID,
 		DepartureAt: time.Date(2026, time.September, 17, 8, 0, 0, 0, time.UTC),
 		Segments: []models.Stage{
-			{ID: uuid.New(), Origin: enum.Salvador, Destination: enum.FeiraDeSantana, PriceCents: 2500, AvailableSeats: 4},
+			{ID: uuid.New(), Origin: enum.Salvador, Destination: enum.FeiraDeSantana, DepartureAt: time.Date(2026, time.September, 17, 8, 0, 0, 0, time.UTC), ArrivalAt: time.Date(2026, time.September, 17, 9, 30, 0, 0, time.UTC), PriceCents: 2500, AvailableSeats: 4},
 		},
 	}
 	if err := repository.SaveRide(ride); err != nil {

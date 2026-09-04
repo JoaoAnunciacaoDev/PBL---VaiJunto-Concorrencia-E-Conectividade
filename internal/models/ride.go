@@ -18,6 +18,9 @@ func (r *Ride) IsValid() bool {
 	if r.ID == uuid.Nil || r.DriverID == uuid.Nil || r.DepartureAt.IsZero() || len(r.Segments) == 0 {
 		return false
 	}
+	if !r.DepartureAt.Equal(r.Segments[0].DepartureAt) {
+		return false
+	}
 
 	return areSegmentsContinuous(r.Segments)
 }
@@ -33,7 +36,7 @@ func (r *Ride) AddSegment(segment Stage) bool {
 
 	if len(r.Segments) > 0 {
 		lastSegment := r.Segments[len(r.Segments)-1]
-		if lastSegment.Destination != segment.Origin {
+		if lastSegment.Destination != segment.Origin || lastSegment.ArrivalAt.After(segment.DepartureAt) {
 			return false
 		}
 	}
@@ -104,7 +107,7 @@ func areSegmentsContinuous(segments []Stage) bool {
 			return false
 		}
 
-		if index > 0 && segments[index-1].Destination != segment.Origin {
+		if index > 0 && (segments[index-1].Destination != segment.Origin || segments[index-1].ArrivalAt.After(segment.DepartureAt)) {
 			return false
 		}
 	}

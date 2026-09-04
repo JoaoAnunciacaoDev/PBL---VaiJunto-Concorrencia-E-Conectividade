@@ -42,8 +42,8 @@ func TestDriverCanCreateListAndCancelRide(t *testing.T) {
 	createRide := protocol.CreateRideRequest{
 		DepartureAt: time.Date(2026, time.September, 17, 8, 0, 0, 0, time.UTC),
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.Salvador, Destination: enum.FeiraDeSantana, PriceCents: 2500, AvailableSeats: 4},
-			{Origin: enum.FeiraDeSantana, Destination: enum.Jequie, PriceCents: 3000, AvailableSeats: 3},
+			{Origin: enum.Salvador, Destination: enum.FeiraDeSantana, DepartureAt: time.Date(2026, time.September, 17, 8, 0, 0, 0, time.UTC), ArrivalAt: time.Date(2026, time.September, 17, 9, 30, 0, 0, time.UTC), PriceCents: 2500, AvailableSeats: 4},
+			{Origin: enum.FeiraDeSantana, Destination: enum.Jequie, DepartureAt: time.Date(2026, time.September, 17, 9, 45, 0, 0, time.UTC), ArrivalAt: time.Date(2026, time.September, 17, 11, 30, 0, 0, time.UTC), PriceCents: 3000, AvailableSeats: 3},
 		},
 	}
 	createResponse := sendRequestWithSession(t, server, session, "create_ride", createRide)
@@ -106,9 +106,9 @@ func TestCreateRideRejectsSeatsAboveVehicleCapacity(t *testing.T) {
 	}
 
 	response := sendRequestWithSession(t, server, session, "create_ride", protocol.CreateRideRequest{
-		DepartureAt: time.Now(),
+		DepartureAt: time.Date(2026, time.September, 17, 8, 0, 0, 0, time.UTC),
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.Salvador, Destination: enum.FeiraDeSantana, PriceCents: 2500, AvailableSeats: 5},
+			{Origin: enum.Salvador, Destination: enum.FeiraDeSantana, DepartureAt: time.Date(2026, time.September, 17, 8, 0, 0, 0, time.UTC), ArrivalAt: time.Date(2026, time.September, 17, 9, 30, 0, 0, time.UTC), PriceCents: 2500, AvailableSeats: 5},
 		},
 	})
 	if response.Success != "error" {

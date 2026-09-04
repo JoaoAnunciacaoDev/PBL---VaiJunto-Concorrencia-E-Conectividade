@@ -30,6 +30,8 @@ func (s *Server) handleCreateRide(payload json.RawMessage, session *Session) pro
 			ID:             uuid.New(),
 			Origin:         requestedSegment.Origin,
 			Destination:    requestedSegment.Destination,
+			DepartureAt:    requestedSegment.DepartureAt,
+			ArrivalAt:      requestedSegment.ArrivalAt,
 			PriceCents:     requestedSegment.PriceCents,
 			AvailableSeats: requestedSegment.AvailableSeats,
 		}
@@ -51,7 +53,7 @@ func (s *Server) handleCreateRide(payload json.RawMessage, session *Session) pro
 		Segments:    segments,
 	}
 	if !ride.IsValid() {
-		return protocol.Response{Success: "error", Message: "A rota da carona deve possuir trechos contínuos e válidos."}
+		return protocol.Response{Success: "error", Message: "A rota da carona deve possuir trechos contínuos, em ordem de horário e válidos."}
 	}
 
 	if err := s.repository.SaveRide(ride); err != nil {
