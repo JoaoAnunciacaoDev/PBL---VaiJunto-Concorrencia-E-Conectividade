@@ -1,8 +1,8 @@
 package main
 
 import (
-	"log"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/server"
+	"log"
 )
 
 func main() {

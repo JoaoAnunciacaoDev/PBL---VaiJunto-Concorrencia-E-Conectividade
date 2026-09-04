@@ -49,7 +49,7 @@ func (r *Ride) RemoveSegment(index int) bool {
 
 	updatedSegments := append([]Stage(nil), r.Segments[:index]...)
 	updatedSegments = append(updatedSegments, r.Segments[index+1:]...)
-	
+
 	if len(updatedSegments) == 0 || !areSegmentsContinuous(updatedSegments) {
 		return false
 	}

@@ -14,8 +14,8 @@ func TestRideIsValidWithContinuousSegments(t *testing.T) {
 		DriverID:    uuid.New(),
 		DepartureAt: time.Date(2026, time.September, 17, 8, 0, 0, 0, time.UTC),
 		Segments: []Stage{
-			{Origin: enum.Salvador, Destination: enum.FeiraDeSantana, PriceCents: 2500, AvailableSeats: 3},
-			{Origin: enum.FeiraDeSantana, Destination: enum.Jequie, PriceCents: 3000, AvailableSeats: 1},
+			{ID: uuid.New(), Origin: enum.Salvador, Destination: enum.FeiraDeSantana, PriceCents: 2500, AvailableSeats: 3},
+			{ID: uuid.New(), Origin: enum.FeiraDeSantana, Destination: enum.Jequie, PriceCents: 3000, AvailableSeats: 1},
 		},
 	}
 
@@ -38,12 +38,25 @@ func TestRideRejectsDiscontinuousSegments(t *testing.T) {
 		DriverID:    uuid.New(),
 		DepartureAt: time.Now(),
 		Segments: []Stage{
-			{Origin: enum.Salvador, Destination: enum.FeiraDeSantana, PriceCents: 2500, AvailableSeats: 3},
-			{Origin: enum.Jequie, Destination: enum.VitoriaDaConquista, PriceCents: 3000, AvailableSeats: 3},
+			{ID: uuid.New(), Origin: enum.Salvador, Destination: enum.FeiraDeSantana, PriceCents: 2500, AvailableSeats: 3},
+			{ID: uuid.New(), Origin: enum.Jequie, Destination: enum.VitoriaDaConquista, PriceCents: 3000, AvailableSeats: 3},
 		},
 	}
 
 	if ride.IsValid() {
 		t.Fatal("carona com rota descontínua deveria ser inválida")
+	}
+}
+
+func TestStageRequiresID(t *testing.T) {
+	stage := Stage{
+		Origin:         enum.Salvador,
+		Destination:    enum.FeiraDeSantana,
+		PriceCents:     2500,
+		AvailableSeats: 3,
+	}
+
+	if stage.IsValid() {
+		t.Fatal("trecho sem identificador deveria ser inválido")
 	}
 }
