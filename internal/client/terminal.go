@@ -63,12 +63,12 @@ func connectToServer(address string, input *bufio.Reader, output io.Writer) (*TC
 		}
 
 		switch choice {
-		case "1":
-			utils.ClearTerminal()
-		case "0":
-			return nil, true, nil
-		default:
-			fmt.Fprintln(output, "Opção inválida.")
+			case "1":
+				utils.ClearTerminal()
+			case "0":
+				return nil, true, nil
+			default:
+				fmt.Fprintln(output, "Opção inválida.")
 		}
 	}
 }
