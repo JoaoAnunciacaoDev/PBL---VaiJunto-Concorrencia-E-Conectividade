@@ -97,7 +97,7 @@ func (s *Server) driverForSession(session *Session, requiresVehicle bool) (*mode
 	}
 
 	if !user.IsDriver() {
-		return nil, protocol.Response{Success: "error", Message: "Apenas motoristas podem gerenciar veículos."}, false
+		return nil, protocol.Response{Success: "error", Message: "Apenas motoristas podem executar esta operação."}, false
 	}
 
 	driver, err := s.repository.GetDriverByUserID(user.ID)

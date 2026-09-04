@@ -124,6 +124,15 @@ func (s *Server) processRequest(request protocol.Request, session *Session) prot
 	case "remove_vehicle":
 		return s.handleRemoveVehicle(session)
 
+	case "create_ride":
+		return s.handleCreateRide(request.Payload, session)
+
+	case "list_my_rides":
+		return s.handleListMyRides(session)
+
+	case "cancel_ride":
+		return s.handleCancelRide(request.Payload, session)
+
 	default:
 		return protocol.Response{Success: "error", Message: "Ação desconhecida"}
 	}
