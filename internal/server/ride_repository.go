@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/google/uuid"
@@ -95,6 +96,24 @@ func (r *Repository) GetRidesByDriverID(driverID uuid.UUID) ([]*models.Ride, err
 	return rides, nil
 }
 
+func (r *Repository) GetActiveRidesByDate(date time.Time) ([]*models.Ride, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	rides := make([]*models.Ride, 0)
+	for _, ride := range r.rides {
+		if !ride.Cancelled && sameCalendarDate(ride.DepartureAt, date) {
+			rides = append(rides, ride)
+		}
+	}
+
+	sort.Slice(rides, func(i, j int) bool {
+		return rides[i].DepartureAt.Before(rides[j].DepartureAt)
+	})
+
+	return rides, nil
+}
+
 func (r *Repository) CancelRide(rideID, driverID uuid.UUID) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -117,4 +136,10 @@ func (r *Repository) CancelRide(rideID, driverID uuid.UUID) error {
 	}
 
 	return nil
+}
+
+func sameCalendarDate(first, second time.Time) bool {
+	firstYear, firstMonth, firstDay := first.Date()
+	secondYear, secondMonth, secondDay := second.Date()
+	return firstYear == secondYear && firstMonth == secondMonth && firstDay == secondDay
 }

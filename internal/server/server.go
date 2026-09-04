@@ -133,6 +133,9 @@ func (s *Server) processRequest(request protocol.Request, session *Session) prot
 	case "cancel_ride":
 		return s.handleCancelRide(request.Payload, session)
 
+	case "search_itineraries":
+		return s.handleSearchItineraries(request.Payload, session)
+
 	default:
 		return protocol.Response{Success: "error", Message: "Ação desconhecida"}
 	}

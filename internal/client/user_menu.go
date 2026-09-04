@@ -19,7 +19,7 @@ func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 		if user.Role == models.RoleDriver {
 			fmt.Fprintln(output, "2 - Opções de motorista")
 		} else {
-			fmt.Fprintln(output, "2 - Opções de passageiro (em desenvolvimento)")
+			fmt.Fprintln(output, "2 - Opções de passageiro")
 		}
 
 		fmt.Fprintln(output, "0 - Logout")
@@ -43,7 +43,9 @@ func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 					return MenuDisconnected
 				}
 			} else {
-				fmt.Fprintln(output, "Esta funcionalidade ainda não foi implementada.")
+				if passengerMenu(tcpClient, input, output) == MenuDisconnected {
+					return MenuDisconnected
+				}
 			}
 
 		case "0":
