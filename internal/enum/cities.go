@@ -25,6 +25,21 @@ var cityNames = map[City]string{
 	Lencois:            "Lençóis",
 }
 
+var allCities = []City{
+	FeiraDeSantana,
+	Alagoinhas,
+	Salvador,
+	LauroDeFreitas,
+	Camacari,
+	VitoriaDaConquista,
+	Jequie,
+	Lencois,
+}
+
+func Cities() []City {
+	return append([]City(nil), allCities...)
+}
+
 func (c City) String() string {
 	return cityNames[c]
 }

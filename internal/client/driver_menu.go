@@ -27,7 +27,9 @@ func driverMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) Men
 			}
 		case "2":
 			utils.ClearTerminal()
-			fmt.Fprintln(output, "Módulo de caronas em desenvolvimento.")
+			if rideMenu(tcpClient, input, output) == MenuDisconnected {
+				return MenuDisconnected
+			}
 		case "0":
 			return MenuBack
 		default:
