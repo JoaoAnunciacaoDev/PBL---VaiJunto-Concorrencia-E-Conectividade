@@ -4,8 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
+)
+
+const (
+	connectTimeout = 5 * time.Second
+	requestTimeout = 10 * time.Second
 )
 
 type TCPClient struct {
@@ -15,10 +21,10 @@ type TCPClient struct {
 }
 
 func Dial(address string) (*TCPClient, error) {
-	conn, err := net.Dial("tcp", address)
+	conn, err := net.DialTimeout("tcp", address, connectTimeout)
 
 	if err != nil {
-		return nil, fmt.Errorf("conectar ao servidor: %w", err)
+		return nil, fmt.Errorf("Erro ao conectar ao servidor: %w", err)
 	}
 
 	return &TCPClient{
@@ -29,6 +35,12 @@ func Dial(address string) (*TCPClient, error) {
 }
 
 func (c *TCPClient) Send(request protocol.Request) (protocol.Response, error) {
+	if err := c.conn.SetDeadline(time.Now().Add(requestTimeout)); err != nil {
+		return protocol.Response{}, fmt.Errorf("definir tempo limite: %w", err)
+	}
+	
+	defer c.conn.SetDeadline(time.Time{})
+
 	if err := protocol.SendJson(c.encoder, request); err != nil {
 		return protocol.Response{}, fmt.Errorf("enviar requisição: %w", err)
 	}

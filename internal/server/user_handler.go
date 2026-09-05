@@ -28,6 +28,10 @@ func (s *Server) handleRegisterUser(payload json.RawMessage) protocol.Response {
 			Message: "Nome é obrigatório.",
 		}
 	}
+	
+	if dto.Role != models.RolePassenger && dto.Role != models.RoleDriver {
+		return protocol.Response{Success: "error", Message: "Perfil de usuário inválido."}
+	}
 
 	if !isValidEmail(email) {
 		return protocol.Response{

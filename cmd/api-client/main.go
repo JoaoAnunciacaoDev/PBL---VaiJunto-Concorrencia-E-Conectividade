@@ -9,6 +9,7 @@ import (
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 )
 
+// main é o ponto de entrada do aplicativo cliente. Ele inicia a interface de terminal para interação com o usuário.
 func main() {
 	err := client.RunTerminal(
 		"localhost:8080",

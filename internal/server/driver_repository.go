@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/google/uuid"
 )
@@ -74,7 +75,7 @@ func (r *Repository) SaveDriver(driver *models.Driver) error {
 	defer r.mu.Unlock()
 
 	oldDriver, existed := r.drivers[driver.ID]
-	r.drivers[driver.ID] = driver
+	r.drivers[driver.ID] = cloneDriver(driver)
 	if err := r.saveDriversLocked(); err != nil {
 		if existed {
 			r.drivers[driver.ID] = oldDriver
@@ -96,5 +97,84 @@ func (r *Repository) GetDriverByUserID(userID uuid.UUID) (*models.Driver, error)
 		return nil, errors.New("motorista não encontrado")
 	}
 
-	return driver, nil
+	return cloneDriver(driver), nil
+}
+
+// UpdateDriverVehicle changes a vehicle while preserving the capacity required
+// by the driver's active rides. It holds the repository lock for both the
+// validation and the persistence, so a new ride cannot be published between
+// those two steps.
+func (r *Repository) UpdateDriverVehicle(driverID uuid.UUID, vehicle models.Vehicle) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	driver, exists := r.drivers[driverID]
+	if !exists || driver.Vehicle == nil {
+		return errors.New("nenhum veículo cadastrado")
+	}
+
+	requiredCapacity := r.requiredVehicleCapacityForActiveRidesLocked(driverID)
+	if vehicle.SeatCapacity < requiredCapacity {
+		return fmt.Errorf("a capacidade não pode ser menor que %d, exigida pelas caronas ativas", requiredCapacity)
+	}
+
+	previousVehicle := *driver.Vehicle
+	driver.Vehicle = &vehicle
+	if err := r.saveDriversLocked(); err != nil {
+		driver.Vehicle = &previousVehicle
+		return fmt.Errorf("salvar veículo: %w", err)
+	}
+
+	return nil
+}
+
+// RemoveDriverVehicle refuses to remove the vehicle while an active ride still
+// belongs to the driver.
+func (r *Repository) RemoveDriverVehicle(driverID uuid.UUID) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	driver, exists := r.drivers[driverID]
+	if !exists || driver.Vehicle == nil {
+		return errors.New("nenhum veículo cadastrado")
+	}
+
+	if r.requiredVehicleCapacityForActiveRidesLocked(driverID) > 0 {
+		return errors.New("não é possível remover o veículo enquanto houver caronas ativas")
+	}
+
+	previousVehicle := driver.Vehicle
+	driver.Vehicle = nil
+	if err := r.saveDriversLocked(); err != nil {
+		driver.Vehicle = previousVehicle
+		return fmt.Errorf("remover veículo: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) requiredVehicleCapacityForActiveRidesLocked(driverID uuid.UUID) int {
+	occupiedSeats := make(map[models.ReservedSegment]int)
+	for _, reservation := range r.reservations {
+		if reservation.Status != enum.Confirmada {
+			continue
+		}
+		for _, segment := range reservation.Segments {
+			occupiedSeats[segment]++
+		}
+	}
+
+	requiredCapacity := 0
+	for _, ride := range r.rides {
+		if ride.DriverID != driverID || ride.Cancelled {
+			continue
+		}
+		for _, stage := range ride.Segments {
+			requiredCapacity = max(requiredCapacity, stage.AvailableSeats+occupiedSeats[models.ReservedSegment{
+				RideID: ride.ID, SegmentID: stage.ID,
+			}])
+		}
+	}
+
+	return requiredCapacity
 }

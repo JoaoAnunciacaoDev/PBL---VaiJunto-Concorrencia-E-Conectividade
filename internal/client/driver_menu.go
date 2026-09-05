@@ -3,11 +3,12 @@ package client
 import (
 	"bufio"
 	"fmt"
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/utils"
 	"io"
 )
 
-func driverMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) MenuResult {
+func driverMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) enum.MenuResult {
 	for {
 		fmt.Fprintln(output, "\n=== Terminal do Motorista ===")
 		fmt.Fprintln(output, "1 - Veículo")
@@ -16,22 +17,22 @@ func driverMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) Men
 
 		choice, err := readLine(input, output, "Opção: ")
 		if err != nil {
-			return MenuBack
+			return enum.MenuBack
 		}
 
 		switch choice {
 		case "1":
 			utils.ClearTerminal()
-			if vehicleMenu(tcpClient, input, output) == MenuDisconnected {
-				return MenuDisconnected
+			if vehicleMenu(tcpClient, input, output) == enum.MenuDisconnected {
+				return enum.MenuDisconnected
 			}
 		case "2":
 			utils.ClearTerminal()
-			if rideMenu(tcpClient, input, output) == MenuDisconnected {
-				return MenuDisconnected
+			if rideMenu(tcpClient, input, output) == enum.MenuDisconnected {
+				return enum.MenuDisconnected
 			}
 		case "0":
-			return MenuBack
+			return enum.MenuBack
 		default:
 			fmt.Fprintln(output, "Opção inválida.")
 		}

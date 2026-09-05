@@ -53,8 +53,8 @@ func (r *Repository) ConfirmReservation(passengerID uuid.UUID, segments []models
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if user, exists := r.userByIDLocked(passengerID); !exists || user.Role != models.RolePassenger {
-		return nil, errors.New("passageiro inválido")
+	if _, exists := r.userByIDLocked(passengerID); !exists {
+		return nil, errors.New("usuário inválido")
 	}
 
 	stages, err := r.reservedStagesLocked(segments)
@@ -92,10 +92,11 @@ func (r *Repository) ConfirmReservation(passengerID uuid.UUID, segments []models
 	if err := r.saveReservationsLocked(); err != nil {
 		r.restoreSeats(stages)
 		delete(r.reservations, reservation.ID)
+		_ = r.saveRidesLocked()
 		return nil, fmt.Errorf("salvar reserva: %w", err)
 	}
 
-	return reservation, nil
+	return cloneReservation(reservation), nil
 }
 
 func (r *Repository) GetReservationsByPassengerID(passengerID uuid.UUID) ([]*models.Reservation, error) {
@@ -105,7 +106,7 @@ func (r *Repository) GetReservationsByPassengerID(passengerID uuid.UUID) ([]*mod
 	reservations := make([]*models.Reservation, 0)
 	for _, reservation := range r.reservations {
 		if reservation.PassengerID == passengerID {
-			reservations = append(reservations, reservation)
+			reservations = append(reservations, cloneReservation(reservation))
 		}
 	}
 
@@ -190,6 +191,7 @@ func (r *Repository) CancelReservation(reservationID, passengerID uuid.UUID) err
 	if err := r.saveReservationsLocked(); err != nil {
 		r.restoreSeats(stages)
 		reservation.Status = enum.Confirmada
+		_ = r.saveRidesLocked()
 		return fmt.Errorf("salvar cancelamento: %w", err)
 	}
 

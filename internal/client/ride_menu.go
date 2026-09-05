@@ -17,7 +17,7 @@ import (
 
 const rideDateTimeLayout = "02/01/2006 15:04"
 
-func rideMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) MenuResult {
+func rideMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) enum.MenuResult {
 	for {
 		fmt.Fprintln(output, "\n=== Caronas ===")
 		fmt.Fprintln(output, "1 - Publicar carona")
@@ -28,32 +28,36 @@ func rideMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) MenuR
 
 		choice, err := readLine(input, output, "Opção: ")
 		if err != nil {
-			return MenuBack
+			return enum.MenuBack
 		}
 
 		switch choice {
 		case "1":
 			utils.ClearTerminal()
 			if !createRide(tcpClient, input, output) {
-				return MenuDisconnected
+				return enum.MenuDisconnected
 			}
+
 		case "2":
 			utils.ClearTerminal()
 			if !listMyRides(tcpClient, output) {
-				return MenuDisconnected
+				return enum.MenuDisconnected
 			}
+
 		case "3":
 			utils.ClearTerminal()
 			if !cancelRide(tcpClient, input, output) {
-				return MenuDisconnected
+				return enum.MenuDisconnected
 			}
+
 		case "4":
 			utils.ClearTerminal()
 			if !listRidePassengers(tcpClient, input, output) {
-				return MenuDisconnected
+				return enum.MenuDisconnected
 			}
+			
 		case "0":
-			return MenuBack
+			return enum.MenuBack
 		default:
 			fmt.Fprintln(output, "Opção inválida.")
 		}
@@ -165,8 +169,10 @@ func createRide(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) boo
 	return true
 }
 
+// listMyRides solicita ao servidor a lista de caronas publicadas pelo motorista autenticado e as exibe no terminal.
+// Retorna um booleano indicando se a conexão com o servidor foi mantida.
 func listMyRides(tcpClient *TCPClient, output io.Writer) bool {
-	response, err := tcpClient.Send(protocol.Request{Action: "list_my_rides"})
+	response, err := tcpClient.Send(protocol.Request{Action: protocol.ActionListMyRides})
 	if err != nil {
 		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
 		return false
@@ -212,7 +218,7 @@ func cancelRide(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) boo
 		return true
 	}
 
-	response, err := tcpClient.Send(protocol.Request{Action: "cancel_ride", Payload: payload})
+	response, err := tcpClient.Send(protocol.Request{Action: protocol.ActionCancelRide, Payload: payload})
 	if err != nil {
 		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
 		return false
@@ -241,7 +247,7 @@ func listRidePassengers(tcpClient *TCPClient, input *bufio.Reader, output io.Wri
 		return true
 	}
 
-	response, err := tcpClient.Send(protocol.Request{Action: "get_ride_passengers", Payload: payload})
+	response, err := tcpClient.Send(protocol.Request{Action: protocol.ActionGetRidePassengers, Payload: payload})
 	if err != nil {
 		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
 		return false

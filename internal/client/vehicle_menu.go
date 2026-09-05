@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/utils"
@@ -12,7 +13,7 @@ import (
 	"strings"
 )
 
-func vehicleMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) MenuResult {
+func vehicleMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) enum.MenuResult {
 	for {
 		fmt.Fprintln(output, "\n=== Veículo ===")
 		fmt.Fprintln(output, "1 - Cadastrar")
@@ -23,32 +24,37 @@ func vehicleMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) Me
 
 		choice, err := readLine(input, output, "Opção: ")
 		if err != nil {
-			return MenuBack
+			return enum.MenuBack
 		}
 
 		switch choice {
 		case "1":
 			utils.ClearTerminal()
 			if !registerVehicle(tcpClient, input, output) {
-				return MenuDisconnected
+				return enum.MenuDisconnected
 			}
+
 		case "2":
 			utils.ClearTerminal()
 			if !showMyVehicle(tcpClient, output) {
-				return MenuDisconnected
+				return enum.MenuDisconnected
 			}
+
 		case "3":
 			utils.ClearTerminal()
 			if !updateVehicle(tcpClient, input, output) {
-				return MenuDisconnected
+				return enum.MenuDisconnected
 			}
+
 		case "4":
 			utils.ClearTerminal()
 			if !removeVehicle(tcpClient, input, output) {
-				return MenuDisconnected
+				return enum.MenuDisconnected
 			}
+
 		case "0":
-			return MenuBack
+			return enum.MenuBack
+			
 		default:
 			fmt.Fprintln(output, "Opção inválida.")
 		}
@@ -56,34 +62,40 @@ func vehicleMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) Me
 }
 
 func registerVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
-	return submitVehicle(tcpClient, input, output, "register_vehicle", "cadastro")
+	return submitVehicle(tcpClient, input, output, protocol.ActionRegisterVehicle, "cadastro")
 }
 
 func updateVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
-	return submitVehicle(tcpClient, input, output, "update_vehicle", "atualização")
+	return submitVehicle(tcpClient, input, output, protocol.ActionUpdateVehicle, "atualização")
 }
 
-func submitVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, action, operation string) bool {
+// submitVehicle solicita ao usuário as informações do veículo, envia uma solicitação de cadastro ou atualização ao servidor e exibe a mensagem de resposta.
+// Retorna um booleano indicando se a conexão com o servidor foi mantida.
+func submitVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, action protocol.Action, operation string) bool {
 	plate, err := readLine(input, output, "Placa: ")
 	if err != nil {
 		fmt.Fprintln(output, "Não foi possível ler a placa.")
 		return true
 	}
+
 	model, err := readLine(input, output, "Modelo: ")
 	if err != nil {
 		fmt.Fprintln(output, "Não foi possível ler o modelo.")
 		return true
 	}
+
 	color, err := readLine(input, output, "Cor: ")
 	if err != nil {
 		fmt.Fprintln(output, "Não foi possível ler a cor.")
 		return true
 	}
+
 	capacityText, err := readLine(input, output, "Quantidade de assentos: ")
 	if err != nil {
 		fmt.Fprintln(output, "Não foi possível ler a capacidade.")
 		return true
 	}
+
 	seatCapacity, err := strconv.Atoi(capacityText)
 	if err != nil {
 		fmt.Fprintln(output, "A quantidade de assentos deve ser um número inteiro.")
@@ -112,11 +124,12 @@ func submitVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, 
 }
 
 func showMyVehicle(tcpClient *TCPClient, output io.Writer) bool {
-	response, err := tcpClient.Send(protocol.Request{Action: "get_my_vehicle"})
+	response, err := tcpClient.Send(protocol.Request{Action: protocol.ActionGetMyVehicle})
 	if err != nil {
 		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
 		return false
 	}
+
 	if response.Success != "success" {
 		fmt.Fprintln(output, response.Message)
 		return true
@@ -138,12 +151,13 @@ func removeVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) 
 		fmt.Fprintln(output, "Não foi possível ler a confirmação.")
 		return true
 	}
+
 	if strings.ToLower(confirmation) != "s" {
 		fmt.Fprintln(output, "Remoção cancelada.")
 		return true
 	}
 
-	response, err := tcpClient.Send(protocol.Request{Action: "remove_vehicle"})
+	response, err := tcpClient.Send(protocol.Request{Action: protocol.ActionRemoveVehicle})
 	if err != nil {
 		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
 		return false

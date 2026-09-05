@@ -19,6 +19,10 @@ type itineraryEdge struct {
 	stage  models.Stage
 }
 
+// handleSearchItineraries lida com a solicitação de busca de itinerários.
+// Ele verifica se o usuário está autenticado, valida os parâmetros da solicitação,
+// busca caronas ativas na data especificada e procura itinerários que conectem a origem e o destino.
+// Retorna uma resposta com os itinerários encontrados ou uma mensagem de erro.
 func (s *Server) handleSearchItineraries(payload json.RawMessage, session *Session) protocol.Response {
 	if response, ok := s.passengerForSession(session); !ok {
 		return response
@@ -46,13 +50,10 @@ func (s *Server) passengerForSession(session *Session) (protocol.Response, bool)
 		return protocol.Response{Success: "error", Message: "Autenticação necessária."}, false
 	}
 
-	user, err := s.repository.GetUserByID(session.UserID)
+	_, err := s.repository.GetUserByID(session.UserID)
 	if err != nil {
 		session.Clear()
 		return protocol.Response{Success: "error", Message: "Sessão inválida. Faça login novamente."}, false
-	}
-	if user.Role != models.RolePassenger {
-		return protocol.Response{Success: "error", Message: "Apenas passageiros podem buscar itinerários."}, false
 	}
 
 	return protocol.Response{}, true

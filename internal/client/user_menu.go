@@ -5,55 +5,60 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/utils"
 )
 
-func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, user protocol.UserResponse) MenuResult {
+func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, user protocol.UserResponse) enum.MenuResult {
 	for {
 		fmt.Fprintf(output, "\n=== Área de %s ===\n", user.Name)
 		fmt.Fprintln(output, "1 - Ver meu perfil")
+		fmt.Fprintln(output, "2 - Opções de passageiro")
 
 		if user.Role == models.RoleDriver {
-			fmt.Fprintln(output, "2 - Opções de motorista")
-		} else {
-			fmt.Fprintln(output, "2 - Opções de passageiro")
+			fmt.Fprintln(output, "3 - Opções de motorista")
 		}
 
 		fmt.Fprintln(output, "0 - Logout")
 
 		choice, err := readLine(input, output, "Opção: ")
 		if err != nil {
-			return MenuBack
+			return enum.MenuBack
 		}
 
 		switch choice {
 		case "1":
 			utils.ClearTerminal()
 			if !showMyProfile(tcpClient, output) {
-				return MenuDisconnected
+				return enum.MenuDisconnected
 			}
 
 		case "2":
 			utils.ClearTerminal()
-			if user.Role == models.RoleDriver {
-				if driverMenu(tcpClient, input, output) == MenuDisconnected {
-					return MenuDisconnected
-				}
-			} else {
-				if passengerMenu(tcpClient, input, output) == MenuDisconnected {
-					return MenuDisconnected
-				}
+			if passengerMenu(tcpClient, input, output) == enum.MenuDisconnected {
+				return enum.MenuDisconnected
+			}
+
+		case "3":
+			if user.Role != models.RoleDriver {
+				utils.ClearTerminal()
+				fmt.Fprintln(output, "Opção inválida.")
+				continue
+			}
+
+			utils.ClearTerminal()
+			if driverMenu(tcpClient, input, output) == enum.MenuDisconnected {
+				return enum.MenuDisconnected
 			}
 
 		case "0":
 			utils.ClearTerminal()
 			if !logout(tcpClient, output) {
-				return MenuDisconnected
+				return enum.MenuDisconnected
 			}
-			return MenuBack
+			return enum.MenuBack
 
 		default:
 			utils.ClearTerminal()
@@ -62,6 +67,8 @@ func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 	}
 }
 
+// showMyProfile solicita ao servidor as informações do perfil do usuário autenticado e as exibe no terminal.
+// Retorna um booleano indicando se a conexão com o servidor foi mantida.
 func showMyProfile(tcpClient *TCPClient, output io.Writer) bool {
 	response, err := tcpClient.Send(protocol.Request{Action: "get_my_profile"})
 	if err != nil {
@@ -87,6 +94,8 @@ func showMyProfile(tcpClient *TCPClient, output io.Writer) bool {
 	return true
 }
 
+// logout envia uma solicitação de logout ao servidor e exibe a mensagem de resposta no terminal.
+// Retorna um booleano indicando se a conexão com o servidor foi mantida.
 func logout(tcpClient *TCPClient, output io.Writer) bool {
 	response, err := tcpClient.Send(protocol.Request{Action: "logout"})
 	if err != nil {

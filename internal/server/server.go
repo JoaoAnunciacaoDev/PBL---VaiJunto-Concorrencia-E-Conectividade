@@ -16,6 +16,9 @@ type Server struct {
 	repository *Repository
 }
 
+// NewServer cria uma nova instância do servidor com o endereço e o caminho para o arquivo de usuários fornecidos.
+// Ele inicializa o repositório de usuários
+// Retorna um ponteiro para a instância do servidor e possíveis erros.
 func NewServer(addr, usersPath string) (*Server, error) {
 	repository, err := NewRepository(usersPath)
 
@@ -29,6 +32,8 @@ func NewServer(addr, usersPath string) (*Server, error) {
 	}, nil
 }
 
+// Start inicia o servidor, escutando no endereço especificado e aceitando conexões de clientes.
+// Para cada conexão aceita, ele cria uma goroutine para lidar com a comunicação com o cliente.
 func (s *Server) Start() error {
 	listener, err := net.Listen("tcp", s.addr)
 
@@ -52,6 +57,9 @@ func (s *Server) Start() error {
 	}
 }
 
+// handleConnection lida com a comunicação com um cliente conectado.
+// Ele lê solicitações JSON do cliente, processa as solicitações e envia respostas JSON de volta.
+// O loop continua até que o cliente se desconecte ou ocorra um erro.
 func (s *Server) handleConnection(conn net.Conn) {
 	decoder := json.NewDecoder(conn)
 	encoder := json.NewEncoder(conn)
@@ -67,6 +75,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	for {
 		var request protocol.Request
+		// Lê a solicitação JSON do cliente. apenas executa o restante do código 
+		// se houver o que ler e não houver erro na leitura da solicitação.
 		err := protocol.ReadJson(decoder, &request)
 
 		if err != nil {
@@ -100,55 +110,55 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 func (s *Server) processRequest(request protocol.Request, session *Session) protocol.Response {
 	switch request.Action {
-	case "register_user":
-		return s.handleRegisterUser(request.Payload)
+		case protocol.ActionRegisterUser:
+			return s.handleRegisterUser(request.Payload)
 
-	case "login":
-		return s.handleLogin(request.Payload, session)
+		case protocol.ActionLogin:
+			return s.handleLogin(request.Payload, session)
 
-	case "get_my_profile":
-		return s.handleGetMyProfile(session)
+		case protocol.ActionGetMyProfile:
+			return s.handleGetMyProfile(session)
 
-	case "logout":
-		return s.handleLogout(session)
+		case protocol.ActionLogout:
+			return s.handleLogout(session)
 
-	case "register_vehicle":
-		return s.handleRegisterVehicle(request.Payload, session)
+		case protocol.ActionRegisterVehicle:
+			return s.handleRegisterVehicle(request.Payload, session)
 
-	case "get_my_vehicle":
-		return s.handleGetMyVehicle(session)
+		case protocol.ActionGetMyVehicle:
+			return s.handleGetMyVehicle(session)
 
-	case "update_vehicle":
-		return s.handleUpdateVehicle(request.Payload, session)
+		case protocol.ActionUpdateVehicle:
+			return s.handleUpdateVehicle(request.Payload, session)
 
-	case "remove_vehicle":
-		return s.handleRemoveVehicle(session)
+		case protocol.ActionRemoveVehicle:
+			return s.handleRemoveVehicle(session)
 
-	case "create_ride":
-		return s.handleCreateRide(request.Payload, session)
+		case protocol.ActionCreateRide:
+			return s.handleCreateRide(request.Payload, session)
 
-	case "list_my_rides":
-		return s.handleListMyRides(session)
+		case protocol.ActionListMyRides:
+			return s.handleListMyRides(session)
 
-	case "cancel_ride":
-		return s.handleCancelRide(request.Payload, session)
+		case protocol.ActionCancelRide:
+			return s.handleCancelRide(request.Payload, session)
 
-	case "get_ride_passengers":
-		return s.handleGetRidePassengers(request.Payload, session)
+		case protocol.ActionGetRidePassengers:
+			return s.handleGetRidePassengers(request.Payload, session)
 
-	case "search_itineraries":
-		return s.handleSearchItineraries(request.Payload, session)
+		case protocol.ActionSearchItineraries:
+			return s.handleSearchItineraries(request.Payload, session)
 
-	case "confirm_reservation":
-		return s.handleConfirmReservation(request.Payload, session)
+		case protocol.ActionConfirmReservation:
+			return s.handleConfirmReservation(request.Payload, session)
 
-	case "list_my_reservations":
-		return s.handleListMyReservations(session)
+		case protocol.ActionListMyReservations:
+			return s.handleListMyReservations(session)
 
-	case "cancel_reservation":
-		return s.handleCancelReservation(request.Payload, session)
+		case protocol.ActionCancelReservation:
+			return s.handleCancelReservation(request.Payload, session)
 
-	default:
-		return protocol.Response{Success: "error", Message: "Ação desconhecida"}
-	}
+		default:
+			return protocol.Response{Success: "error", Message: "Ação desconhecida"}
+		}
 }

@@ -96,6 +96,12 @@ func TestRegisterUserRejectsInvalidEmailAndPassword(t *testing.T) {
 				request.Password = "Senha123"
 			},
 		},
+		{
+			name: "perfil inválido",
+			mutate: func(request *protocol.CreateUserRequest) {
+				request.Role = "ADMIN"
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -271,15 +277,17 @@ func TestRegisterVehicleRequiresAuthenticatedDriver(t *testing.T) {
 	if updateResponse.Success != "success" {
 		t.Fatalf("atualização do veículo deveria funcionar, recebeu: %s", updateResponse.Message)
 	}
-	if storedDriver.Vehicle.Plate != "DEF-5678" || storedDriver.Vehicle.SeatCapacity != 5 {
-		t.Errorf("veículo não foi atualizado corretamente: %+v", storedDriver.Vehicle)
+	storedDriver, err = server.repository.GetDriverByUserID(driverSession.UserID)
+	if err != nil || storedDriver.Vehicle == nil || storedDriver.Vehicle.Plate != "DEF-5678" || storedDriver.Vehicle.SeatCapacity != 5 {
+		t.Errorf("veículo não foi atualizado corretamente: %+v", storedDriver)
 	}
 
 	removeResponse := sendRequestWithSession(t, server, driverSession, "remove_vehicle", nil)
 	if removeResponse.Success != "success" {
 		t.Fatalf("remoção do veículo deveria funcionar, recebeu: %s", removeResponse.Message)
 	}
-	if storedDriver.HasVehicle() {
+	storedDriver, err = server.repository.GetDriverByUserID(driverSession.UserID)
+	if err != nil || storedDriver.HasVehicle() {
 		t.Fatal("motorista não deveria possuir veículo após remoção")
 	}
 	if response := sendRequestWithSession(t, server, driverSession, "get_my_vehicle", nil); response.Success != "error" {
@@ -326,11 +334,11 @@ func TestRegisterUserPersistsDataAcrossServerRestart(t *testing.T) {
 	}
 }
 
-func sendRequest(t *testing.T, server *Server, action string, payload any) protocol.Response {
+func sendRequest(t *testing.T, server *Server, action protocol.Action, payload any) protocol.Response {
 	return sendRequestWithSession(t, server, &Session{}, action, payload)
 }
 
-func sendRequestWithSession(t *testing.T, server *Server, session *Session, action string, payload any) protocol.Response {
+func sendRequestWithSession(t *testing.T, server *Server, session *Session, action protocol.Action, payload any) protocol.Response {
 	t.Helper()
 
 	data, err := json.Marshal(payload)

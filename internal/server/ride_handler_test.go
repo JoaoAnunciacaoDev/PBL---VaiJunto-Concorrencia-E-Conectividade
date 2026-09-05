@@ -73,20 +73,20 @@ func TestDriverCanCreateListAndCancelRide(t *testing.T) {
 	}
 
 	passengerRegistration := protocol.CreateUserRequest{
-		Name:     "Paulo Passageiro",
+		Name:     "Paulo Motorista",
 		Email:    "paulo.passageiro@example.com",
 		Password: "Senha@123",
-		Role:     models.RolePassenger,
+		Role:     models.RoleDriver,
 	}
 	if response := sendRequest(t, server, "register_user", passengerRegistration); response.Success != "success" {
-		t.Fatalf("cadastro do passageiro deveria funcionar: %s", response.Message)
+		t.Fatalf("cadastro do segundo motorista deveria funcionar: %s", response.Message)
 	}
 
 	passengerSession := &Session{}
 	if response := sendRequestWithSession(t, server, passengerSession, "login", protocol.LoginRequest{
 		Email: passengerRegistration.Email, Password: passengerRegistration.Password,
 	}); response.Success != "success" {
-		t.Fatalf("login do passageiro deveria funcionar: %s", response.Message)
+		t.Fatalf("login do segundo motorista deveria funcionar: %s", response.Message)
 	}
 	if response := sendRequestWithSession(t, server, passengerSession, "confirm_reservation", protocol.ConfirmReservationRequest{
 		Segments: []models.ReservedSegment{{RideID: createdRide.ID, SegmentID: createdRide.Segments[0].ID}},

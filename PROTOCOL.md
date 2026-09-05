@@ -1,6 +1,6 @@
 # Protocolo TCP/JSON do VaiJunto
 
-Este documento descreve as mensagens aceitas pelo servidor do VaiJunto. Ele é a referência para outro cliente — gráfico, web ou de terminal — conversar com o servidor sem depender da implementação em Go.
+Este documento descreve as mensagens aceitas pelo servidor do VaiJunto. Ele é a referência para os clientes conversarem com o servidor sem depender da implementação em Go.
 
 ## Transporte e enquadramento
 
@@ -266,11 +266,11 @@ Requer que o motorista possua veículo. Substitui os dados do veículo atual.
 }
 ```
 
-**Sucesso:** `data` contém um [Veículo](#veículo-vehicle).
+**Sucesso:** `data` contém um [Veículo](#veículo-vehicle). A capacidade não pode ser reduzida abaixo da capacidade exigida por qualquer carona ativa do motorista. Alterar placa, modelo, cor ou aumentar a capacidade é permitido.
 
 ### `remove_vehicle`
 
-Requer que o motorista possua veículo.
+Requer que o motorista possua veículo. A remoção é recusada enquanto o motorista possuir alguma carona ativa; cancele essas caronas antes de remover o veículo.
 
 **Requisição**
 
@@ -384,7 +384,7 @@ Trechos sem reserva possuem `"passengers": []`. Reservas canceladas não aparece
 
 ## Ações de passageiro
 
-Todas as ações desta seção requerem uma sessão autenticada de usuário com perfil `"PASSENGER"`.
+Todas as ações desta seção requerem uma sessão autenticada. Usuários com perfil `"DRIVER"` também podem executar essas ações, pois motorista mantém as capacidades de passageiro.
 
 ### `search_itineraries`
 
@@ -484,4 +484,4 @@ Uma ação desconhecida responde:
 {"success":"error","message":"Ação desconhecida"}
 ```
 
-Em ações protegidas, erros comuns são `"Autenticação necessária."`, `"Apenas motoristas podem executar esta operação."` e `"Apenas passageiros podem buscar itinerários."`. Clientes devem tomar `success` como a indicação programática de êxito e tratar `message` como texto para pessoas, não como código de erro estável.
+Em ações protegidas, erros comuns são `"Autenticação necessária."` e `"Apenas motoristas podem executar esta operação."`. Clientes devem tomar `success` como a indicação programática de êxito e tratar `message` como texto para pessoas, não como código de erro estável.

@@ -57,15 +57,11 @@ func (s *Server) handleUpdateVehicle(payload json.RawMessage, session *Session) 
 		return response
 	}
 
-	if err := driver.UpdateVehicle(vehicle.Plate, vehicle.Model, vehicle.Color, vehicle.SeatCapacity); err != nil {
-		return protocol.Response{Success: "error", Message: "Não foi possível atualizar o veículo."}
+	if err := s.repository.UpdateDriverVehicle(driver.ID, vehicle); err != nil {
+		return protocol.Response{Success: "error", Message: err.Error()}
 	}
 
-	if err := s.repository.SaveDriver(driver); err != nil {
-		return protocol.Response{Success: "error", Message: "Não foi possível atualizar o veículo."}
-	}
-
-	return vehicleResponse(*driver.Vehicle, "Veículo atualizado com sucesso.")
+	return vehicleResponse(vehicle, "Veículo atualizado com sucesso.")
 }
 
 func (s *Server) handleRemoveVehicle(session *Session) protocol.Response {
@@ -75,10 +71,8 @@ func (s *Server) handleRemoveVehicle(session *Session) protocol.Response {
 		return response
 	}
 
-	driver.RemoveVehicle()
-
-	if err := s.repository.SaveDriver(driver); err != nil {
-		return protocol.Response{Success: "error", Message: "Não foi possível remover o veículo."}
+	if err := s.repository.RemoveDriverVehicle(driver.ID); err != nil {
+		return protocol.Response{Success: "error", Message: err.Error()}
 	}
 
 	return protocol.Response{Success: "success", Message: "Veículo removido com sucesso."}

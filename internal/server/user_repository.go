@@ -25,7 +25,7 @@ func (r *Repository) loadUsers() error {
 	}
 
 	for _, stored := range users {
-		if stored.ID == uuid.Nil || stored.Email == "" || stored.PasswordHash == "" {
+		if stored.ID == uuid.Nil || stored.Email == "" || stored.PasswordHash == "" || (stored.Role != models.RolePassenger && stored.Role != models.RoleDriver) {
 			return errors.New("arquivo de usuários contém um registro inválido")
 		}
 
@@ -66,8 +66,8 @@ func (r *Repository) saveUsersLocked() error {
 }
 
 func (r *Repository) SaveUser(user *models.User) error {
-	if user == nil {
-		return errors.New("usuário não pode ser nulo")
+	if user == nil || user.ID == uuid.Nil || (user.Role != models.RolePassenger && user.Role != models.RoleDriver) {
+		return errors.New("usuário inválido")
 	}
 
 	r.mu.Lock()
@@ -80,7 +80,7 @@ func (r *Repository) SaveUser(user *models.User) error {
 		return errors.New("Usuário já existe.")
 	}
 
-	r.users[normalizedEmail] = user
+	r.users[normalizedEmail] = cloneUser(user)
 	if err := r.saveUsersLocked(); err != nil {
 		delete(r.users, normalizedEmail)
 		return fmt.Errorf("salvar usuário: %w", err)
@@ -99,7 +99,7 @@ func (r *Repository) GetUserByEmail(email string) (*models.User, error) {
 		return nil, errors.New("Usuário não encontrado.")
 	}
 
-	return user, nil
+	return cloneUser(user), nil
 }
 
 func (r *Repository) GetUserByID(id uuid.UUID) (*models.User, error) {
@@ -111,7 +111,7 @@ func (r *Repository) GetUserByID(id uuid.UUID) (*models.User, error) {
 		return nil, errors.New("usuário não encontrado")
 	}
 
-	return user, nil
+	return cloneUser(user), nil
 }
 
 func (r *Repository) userByIDLocked(id uuid.UUID) (*models.User, bool) {

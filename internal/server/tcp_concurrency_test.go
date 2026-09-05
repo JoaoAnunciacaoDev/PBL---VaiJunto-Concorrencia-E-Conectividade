@@ -14,9 +14,9 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// TestTCPConcurrentClientsReserveLastSeat exercises the same path used by the
-// terminal clients: distinct TCP connections, JSON messages, login and then a
-// simultaneous reservation attempt for one remaining seat.
+// TestTCPConcurrentClientsReserveLastSeat executa o mesmo caminho usado pelos clientes de terminal:
+// conexões TCP distintas, mensagens JSON, login e, em seguida, uma tentativa simultânea de reserva para um
+// assento restante.
 func TestTCPConcurrentClientsReserveLastSeat(t *testing.T) {
 	server := newTestServer(t)
 	address := startTCPTestListener(t, server)

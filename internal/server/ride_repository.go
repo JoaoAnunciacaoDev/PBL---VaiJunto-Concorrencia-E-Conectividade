@@ -54,7 +54,41 @@ func (r *Repository) SaveRide(ride *models.Ride) error {
 	defer r.mu.Unlock()
 
 	oldRide, existed := r.rides[ride.ID]
-	r.rides[ride.ID] = ride
+	r.rides[ride.ID] = cloneRide(ride)
+	if err := r.saveRidesLocked(); err != nil {
+		if existed {
+			r.rides[ride.ID] = oldRide
+		} else {
+			delete(r.rides, ride.ID)
+		}
+		return fmt.Errorf("salvar carona: %w", err)
+	}
+
+	return nil
+}
+
+// SaveRideForDriver performs the final vehicle-capacity check while holding the
+// same lock used by vehicle updates and removals.
+func (r *Repository) SaveRideForDriver(ride *models.Ride) error {
+	if ride == nil || !ride.IsValid() {
+		return errors.New("carona inválida")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	driver, exists := r.drivers[ride.DriverID]
+	if !exists || driver.Vehicle == nil {
+		return errors.New("nenhum veículo cadastrado")
+	}
+	for _, stage := range ride.Segments {
+		if stage.AvailableSeats > driver.Vehicle.SeatCapacity {
+			return errors.New("a capacidade da carona excede a capacidade atual do veículo")
+		}
+	}
+
+	oldRide, existed := r.rides[ride.ID]
+	r.rides[ride.ID] = cloneRide(ride)
 	if err := r.saveRidesLocked(); err != nil {
 		if existed {
 			r.rides[ride.ID] = oldRide
@@ -76,7 +110,7 @@ func (r *Repository) GetRideByID(id uuid.UUID) (*models.Ride, error) {
 		return nil, errors.New("carona não encontrada")
 	}
 
-	return ride, nil
+	return cloneRide(ride), nil
 }
 
 func (r *Repository) GetRidesByDriverID(driverID uuid.UUID) ([]*models.Ride, error) {
@@ -86,7 +120,7 @@ func (r *Repository) GetRidesByDriverID(driverID uuid.UUID) ([]*models.Ride, err
 	rides := make([]*models.Ride, 0)
 	for _, ride := range r.rides {
 		if ride.DriverID == driverID {
-			rides = append(rides, ride)
+			rides = append(rides, cloneRide(ride))
 		}
 	}
 
@@ -104,7 +138,7 @@ func (r *Repository) GetActiveRidesByDate(date time.Time) ([]*models.Ride, error
 	rides := make([]*models.Ride, 0)
 	for _, ride := range r.rides {
 		if !ride.Cancelled && sameCalendarDate(ride.DepartureAt, date) {
-			rides = append(rides, ride)
+			rides = append(rides, cloneRide(ride))
 		}
 	}
 
@@ -149,11 +183,7 @@ func (r *Repository) CancelRide(rideID, driverID uuid.UUID) error {
 	}
 	if err := r.saveReservationsLocked(); err != nil {
 		r.restoreRideCancellation(ride, affectedReservations)
-		// A escrita de cada arquivo é atômica, mas rides.json já foi salvo. Esta
-		// segunda escrita restaura o arquivo para o mesmo estado da memória.
-		if restoreErr := r.saveRidesLocked(); restoreErr != nil {
-			return fmt.Errorf("cancelar carona e restaurar estado: %w", restoreErr)
-		}
+		_ = r.saveRidesLocked()
 		return fmt.Errorf("salvar cancelamento das reservas: %w", err)
 	}
 

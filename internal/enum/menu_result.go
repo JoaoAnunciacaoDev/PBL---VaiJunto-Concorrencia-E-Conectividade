@@ -1,4 +1,4 @@
-package client
+package enum
 
 type MenuResult int
 

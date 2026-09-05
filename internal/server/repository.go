@@ -23,6 +23,10 @@ type Repository struct {
 	reservationsPath string
 }
 
+// NewRepository cria uma nova instância do repositório com o caminho para o arquivo de usuários fornecido.
+// Ele inicializa os mapas de usuários, motoristas, caronas e reservas,
+// e carrega os dados dos arquivos JSON correspondentes.
+// Retorna um ponteiro para a instância do repositório e possíveis erros.
 func NewRepository(usersPath string) (*Repository, error) {
 	dataDirectory := filepath.Dir(usersPath)
 	repository := &Repository{
@@ -39,12 +43,15 @@ func NewRepository(usersPath string) (*Repository, error) {
 	if err := repository.loadUsers(); err != nil {
 		return nil, fmt.Errorf("carregar usuários: %w", err)
 	}
+
 	if err := repository.loadDrivers(); err != nil {
 		return nil, fmt.Errorf("carregar motoristas: %w", err)
 	}
+
 	if err := repository.loadRides(); err != nil {
 		return nil, fmt.Errorf("carregar caronas: %w", err)
 	}
+
 	if err := repository.loadReservations(); err != nil {
 		return nil, fmt.Errorf("carregar reservas: %w", err)
 	}

@@ -37,17 +37,11 @@ Mantenha esse terminal aberto enquanto usa os clientes. Os registros do servidor
 
 ### 2. Inicie um cliente
 
-Abra outro terminal na raiz do projeto. Há três opções:
+Abra outro terminal na raiz do projeto:
 
 ```bash
-# Cliente geral: permite escolher Passageiro ou Motorista no cadastro
+# Cliente: permite escolher Passageiro ou Motorista no cadastro
 go run ./cmd/api-client
-
-# Cliente com cadastro orientado para Motorista
-go run ./cmd/api-client-driver
-
-# Cliente com cadastro orientado para Passageiro
-go run ./cmd/api-client-passenger
 ```
 
 Todos se conectam a `localhost:8080`. Se o servidor estiver desligado, o cliente oferece as opções de tentar conectar novamente ou sair.
@@ -83,10 +77,14 @@ Uma reserva pode ter mais de um trecho. O servidor só confirma a reserva se tod
 | Perfil | Operações |
 | --- | --- |
 | Todos | Cadastro, login, perfil e logout |
-| Motorista | CRUD de veículo, publicar/listar/cancelar caronas e consultar passageiros confirmados por trecho |
+| Motorista | Todas as operações de passageiro, além de CRUD de veículo, publicar/listar/cancelar caronas e consultar passageiros confirmados por trecho |
 | Passageiro | Buscar itinerários, confirmar/listar/cancelar reservas |
 
 Quando o motorista cancela uma carona, as reservas confirmadas que dependem dela também são canceladas e os assentos dos trechos são devolvidos. O passageiro continua vendo essa reserva no histórico com status `Cancelada`.
+
+Motorista também pode atuar como passageiro: buscar itinerários e fazer ou cancelar reservas de caronas de outros motoristas.
+
+Um veículo não pode ser removido enquanto o motorista possuir caronas ativas. Sua capacidade também não pode ser reduzida abaixo da capacidade exigida por essas caronas.
 
 ## Validações de cadastro
 

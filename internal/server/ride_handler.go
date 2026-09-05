@@ -56,8 +56,8 @@ func (s *Server) handleCreateRide(payload json.RawMessage, session *Session) pro
 		return protocol.Response{Success: "error", Message: "A rota da carona deve possuir trechos contínuos, em ordem de horário e válidos."}
 	}
 
-	if err := s.repository.SaveRide(ride); err != nil {
-		return protocol.Response{Success: "error", Message: "Não foi possível publicar a carona."}
+	if err := s.repository.SaveRideForDriver(ride); err != nil {
+		return protocol.Response{Success: "error", Message: err.Error()}
 	}
 
 	return rideResponse(ride, "Carona publicada com sucesso.")

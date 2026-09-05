@@ -11,21 +11,21 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestPassengerSearchesDirectAndConnectedItineraries(t *testing.T) {
+func TestDriverSearchesDirectAndConnectedItineraries(t *testing.T) {
 	server := newTestServer(t)
-	passenger := protocol.CreateUserRequest{
-		Name:     "Paula Passageira",
+	driver := protocol.CreateUserRequest{
+		Name:     "Paula Motorista",
 		Email:    "paula@example.com",
 		Password: "Senha@123",
-		Role:     models.RolePassenger,
+		Role:     models.RoleDriver,
 	}
-	if response := sendRequest(t, server, "register_user", passenger); response.Success != "success" {
-		t.Fatalf("cadastro do passageiro deveria funcionar: %s", response.Message)
+	if response := sendRequest(t, server, "register_user", driver); response.Success != "success" {
+		t.Fatalf("cadastro do motorista deveria funcionar: %s", response.Message)
 	}
 
 	session := &Session{}
-	if response := sendRequestWithSession(t, server, session, "login", protocol.LoginRequest{Email: passenger.Email, Password: passenger.Password}); response.Success != "success" {
-		t.Fatalf("login do passageiro deveria funcionar: %s", response.Message)
+	if response := sendRequestWithSession(t, server, session, "login", protocol.LoginRequest{Email: driver.Email, Password: driver.Password}); response.Success != "success" {
+		t.Fatalf("login do motorista deveria funcionar: %s", response.Message)
 	}
 
 	date := time.Date(2026, time.September, 17, 0, 0, 0, 0, time.UTC)
