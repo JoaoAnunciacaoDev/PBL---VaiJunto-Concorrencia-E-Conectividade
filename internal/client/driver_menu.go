@@ -32,6 +32,7 @@ func driverMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) enu
 				return enum.MenuDisconnected
 			}
 		case "0":
+			utils.ClearTerminal()
 			return enum.MenuBack
 		default:
 			fmt.Fprintln(output, "Opção inválida.")

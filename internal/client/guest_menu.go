@@ -29,6 +29,10 @@ func runGuestMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, o
 			if !registerUser(tcpClient, input, output, options) {
 				return enum.MenuDisconnected
 			}
+			if !waitForEnter(input, output) {
+				return enum.MenuExit
+			}
+			utils.ClearTerminal()
 
 		case "2":
 			utils.ClearTerminal()
@@ -41,6 +45,11 @@ func runGuestMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, o
 				if authenticatedMenu(tcpClient, input, output, user) == enum.MenuDisconnected {
 					return enum.MenuDisconnected
 				}
+			} else {
+				if !waitForEnter(input, output) {
+					return enum.MenuExit
+				}
+				utils.ClearTerminal()
 			}
 
 		case "0":
@@ -105,7 +114,7 @@ func registerUser(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, o
 }
 
 // login realiza o processo de login do usuário.
-// Retorna o usuário autenticado, um booleano indicando se o login foi bem-sucedido 
+// Retorna o usuário autenticado, um booleano indicando se o login foi bem-sucedido
 // e outro booleano indicando se a conexão com o servidor foi mantida.
 func login(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) (protocol.UserResponse, bool, bool) {
 	email, err := readLine(input, output, "E-mail: ")

@@ -94,7 +94,7 @@ Um veículo não pode ser removido enquanto o motorista possuir caronas ativas. 
 
 ## Persistência local
 
-O projeto não usa banco de dados. O servidor salva os dados em arquivos JSON legíveis na pasta `data/`, criando-a quando for necessário:
+O projeto não usa banco de dados. Por padrão, o servidor localiza a raiz do projeto (a pasta que contém `go.mod`) e salva os dados em arquivos JSON legíveis na pasta `data/`, criando-a quando for necessário. Ao iniciar, ele informa no log o caminho usado:
 
 ```text
 data/
@@ -102,6 +102,12 @@ data/
 ├── drivers.json
 ├── rides.json
 └── reservations.json
+```
+
+Para usar conscientemente outra pasta — por exemplo, ao testar dados isolados — informe `-data-dir`:
+
+```bash
+go run ./cmd/api-server -data-dir ./outro-diretorio
 ```
 
 Cada alteração relevante é persistida imediatamente, não apenas quando o servidor é encerrado. Assim, os dados continuam disponíveis após reiniciar o servidor.

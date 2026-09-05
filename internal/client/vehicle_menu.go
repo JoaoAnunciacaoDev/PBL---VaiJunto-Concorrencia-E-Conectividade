@@ -33,28 +33,45 @@ func vehicleMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) en
 			if !registerVehicle(tcpClient, input, output) {
 				return enum.MenuDisconnected
 			}
+			if !waitForEnter(input, output) {
+				return enum.MenuBack
+			}
+			utils.ClearTerminal()
 
 		case "2":
 			utils.ClearTerminal()
 			if !showMyVehicle(tcpClient, output) {
 				return enum.MenuDisconnected
 			}
+			if !waitForEnter(input, output) {
+				return enum.MenuBack
+			}
+			utils.ClearTerminal()
 
 		case "3":
 			utils.ClearTerminal()
 			if !updateVehicle(tcpClient, input, output) {
 				return enum.MenuDisconnected
 			}
+			if !waitForEnter(input, output) {
+				return enum.MenuBack
+			}
+			utils.ClearTerminal()
 
 		case "4":
 			utils.ClearTerminal()
 			if !removeVehicle(tcpClient, input, output) {
 				return enum.MenuDisconnected
 			}
+			if !waitForEnter(input, output) {
+				return enum.MenuBack
+			}
+			utils.ClearTerminal()
 
 		case "0":
+			utils.ClearTerminal()
 			return enum.MenuBack
-			
+
 		default:
 			fmt.Fprintln(output, "Opção inválida.")
 		}
@@ -66,6 +83,14 @@ func registerVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer
 }
 
 func updateVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
+	available, connected := ensureVehicle(tcpClient, output)
+	if !connected {
+		return false
+	}
+	if !available {
+		return true
+	}
+
 	return submitVehicle(tcpClient, input, output, protocol.ActionUpdateVehicle, "atualização")
 }
 
@@ -146,6 +171,14 @@ func showMyVehicle(tcpClient *TCPClient, output io.Writer) bool {
 }
 
 func removeVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) bool {
+	available, connected := ensureVehicle(tcpClient, output)
+	if !connected {
+		return false
+	}
+	if !available {
+		return true
+	}
+
 	confirmation, err := readLine(input, output, "Confirma a remoção do veículo? (s/N): ")
 	if err != nil {
 		fmt.Fprintln(output, "Não foi possível ler a confirmação.")
@@ -165,4 +198,20 @@ func removeVehicle(tcpClient *TCPClient, input *bufio.Reader, output io.Writer) 
 
 	fmt.Fprintln(output, response.Message)
 	return true
+}
+
+// ensureVehicle verifica a pré-condição comum às operações que dependem do
+// veículo do motorista, evitando pedir outros dados quando ele não existe.
+func ensureVehicle(tcpClient *TCPClient, output io.Writer) (available bool, connected bool) {
+	response, err := tcpClient.Send(protocol.Request{Action: protocol.ActionGetMyVehicle})
+	if err != nil {
+		fmt.Fprintf(output, "Erro de comunicação: %v\n", err)
+		return false, false
+	}
+	if response.Success != "success" {
+		fmt.Fprintln(output, response.Message)
+		return false, true
+	}
+
+	return true, true
 }

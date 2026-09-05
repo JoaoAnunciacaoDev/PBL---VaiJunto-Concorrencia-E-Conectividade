@@ -94,6 +94,22 @@ func TestDriverCanCreateListAndCancelRide(t *testing.T) {
 		t.Fatalf("reserva deveria funcionar: %s", response.Message)
 	}
 
+	reservationsResponse := sendRequestWithSession(t, server, passengerSession, "list_my_reservations", nil)
+	if reservationsResponse.Success != "success" {
+		t.Fatalf("listagem de reservas deveria funcionar: %s", reservationsResponse.Message)
+	}
+	var reservations []protocol.ReservationResponse
+	if err := json.Unmarshal(reservationsResponse.Payload, &reservations); err != nil {
+		t.Fatalf("resposta deveria conter reservas detalhadas: %v", err)
+	}
+	if len(reservations) != 1 || len(reservations[0].Segments) != 1 {
+		t.Fatalf("reservas retornadas incorretas: %+v", reservations)
+	}
+	reservedStage := reservations[0].Segments[0]
+	if reservedStage.Origin != enum.Salvador || reservedStage.Destination != enum.FeiraDeSantana || reservedStage.DepartureAt != createdRide.Segments[0].DepartureAt {
+		t.Fatalf("trecho detalhado da reserva incorreto: %+v", reservedStage)
+	}
+
 	passengersResponse := sendRequestWithSession(t, server, session, "get_ride_passengers", protocol.GetRidePassengersRequest{RideID: createdRide.ID})
 	if passengersResponse.Success != "success" {
 		t.Fatalf("consulta de passageiros deveria funcionar: %s", passengersResponse.Message)

@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/utils"
+	"io"
 )
 
 func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, user protocol.UserResponse) enum.MenuResult {
@@ -34,6 +34,10 @@ func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 			if !showMyProfile(tcpClient, output) {
 				return enum.MenuDisconnected
 			}
+			if !waitForEnter(input, output) {
+				return enum.MenuBack
+			}
+			utils.ClearTerminal()
 
 		case "2":
 			utils.ClearTerminal()
