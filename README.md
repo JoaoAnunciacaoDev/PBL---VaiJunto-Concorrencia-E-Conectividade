@@ -112,6 +112,10 @@ go run ./cmd/api-server -data-dir ./outro-diretorio
 
 Cada alteração relevante é persistida imediatamente, não apenas quando o servidor é encerrado. Assim, os dados continuam disponíveis após reiniciar o servidor.
 
+## Logs do servidor
+
+Os logs aparecem no terminal e também são acrescentados em `logs/server.log`, ao lado da pasta de dados usada pelo servidor. O arquivo registra inicialização, conexões, ações, sessões e resultados, mas não registra senhas.
+
 ## Comunicação TCP e JSON
 
 TCP é o transporte: ele entrega uma sequência de bytes confiável entre cliente e servidor. JSON é o formato escolhido para representar as mensagens nesses bytes. O projeto usa `json.Encoder` e `json.Decoder`, que enviam e leem um objeto JSON por vez na mesma conexão TCP.

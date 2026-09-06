@@ -43,13 +43,13 @@ func (s *Server) Start() error {
 
 	defer listener.Close()
 
-	fmt.Printf("Servidor iniciado em %s\n", s.addr)
+	log.Printf("server started address=%s", s.addr)
 
 	for {
 		conn, err := listener.Accept()
 
 		if err != nil {
-			fmt.Printf("Erro ao aceitar conexão: %v\n", err)
+			log.Printf("accept connection failed error=%v", err)
 			continue
 		}
 
@@ -75,7 +75,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	for {
 		var request protocol.Request
-		// Lê a solicitação JSON do cliente. apenas executa o restante do código 
+		// Lê a solicitação JSON do cliente. apenas executa o restante do código
 		// se houver o que ler e não houver erro na leitura da solicitação.
 		err := protocol.ReadJson(decoder, &request)
 
@@ -110,55 +110,55 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 func (s *Server) processRequest(request protocol.Request, session *Session) protocol.Response {
 	switch request.Action {
-		case protocol.ActionRegisterUser:
-			return s.handleRegisterUser(request.Payload)
+	case protocol.ActionRegisterUser:
+		return s.handleRegisterUser(request.Payload)
 
-		case protocol.ActionLogin:
-			return s.handleLogin(request.Payload, session)
+	case protocol.ActionLogin:
+		return s.handleLogin(request.Payload, session)
 
-		case protocol.ActionGetMyProfile:
-			return s.handleGetMyProfile(session)
+	case protocol.ActionGetMyProfile:
+		return s.handleGetMyProfile(session)
 
-		case protocol.ActionLogout:
-			return s.handleLogout(session)
+	case protocol.ActionLogout:
+		return s.handleLogout(session)
 
-		case protocol.ActionRegisterVehicle:
-			return s.handleRegisterVehicle(request.Payload, session)
+	case protocol.ActionRegisterVehicle:
+		return s.handleRegisterVehicle(request.Payload, session)
 
-		case protocol.ActionGetMyVehicle:
-			return s.handleGetMyVehicle(session)
+	case protocol.ActionGetMyVehicle:
+		return s.handleGetMyVehicle(session)
 
-		case protocol.ActionUpdateVehicle:
-			return s.handleUpdateVehicle(request.Payload, session)
+	case protocol.ActionUpdateVehicle:
+		return s.handleUpdateVehicle(request.Payload, session)
 
-		case protocol.ActionRemoveVehicle:
-			return s.handleRemoveVehicle(session)
+	case protocol.ActionRemoveVehicle:
+		return s.handleRemoveVehicle(session)
 
-		case protocol.ActionCreateRide:
-			return s.handleCreateRide(request.Payload, session)
+	case protocol.ActionCreateRide:
+		return s.handleCreateRide(request.Payload, session)
 
-		case protocol.ActionListMyRides:
-			return s.handleListMyRides(session)
+	case protocol.ActionListMyRides:
+		return s.handleListMyRides(session)
 
-		case protocol.ActionCancelRide:
-			return s.handleCancelRide(request.Payload, session)
+	case protocol.ActionCancelRide:
+		return s.handleCancelRide(request.Payload, session)
 
-		case protocol.ActionGetRidePassengers:
-			return s.handleGetRidePassengers(request.Payload, session)
+	case protocol.ActionGetRidePassengers:
+		return s.handleGetRidePassengers(request.Payload, session)
 
-		case protocol.ActionSearchItineraries:
-			return s.handleSearchItineraries(request.Payload, session)
+	case protocol.ActionSearchItineraries:
+		return s.handleSearchItineraries(request.Payload, session)
 
-		case protocol.ActionConfirmReservation:
-			return s.handleConfirmReservation(request.Payload, session)
+	case protocol.ActionConfirmReservation:
+		return s.handleConfirmReservation(request.Payload, session)
 
-		case protocol.ActionListMyReservations:
-			return s.handleListMyReservations(session)
+	case protocol.ActionListMyReservations:
+		return s.handleListMyReservations(session)
 
-		case protocol.ActionCancelReservation:
-			return s.handleCancelReservation(request.Payload, session)
+	case protocol.ActionCancelReservation:
+		return s.handleCancelReservation(request.Payload, session)
 
-		default:
-			return protocol.Response{Success: "error", Message: "Ação desconhecida"}
-		}
+	default:
+		return protocol.Response{Success: "error", Message: "Ação desconhecida"}
+	}
 }
