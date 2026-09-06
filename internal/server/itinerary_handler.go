@@ -4,15 +4,12 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"github.com/google/uuid"
 )
-
-const minimumConnectionTime = 15 * time.Minute
 
 type itineraryEdge struct {
 	rideID uuid.UUID
@@ -118,12 +115,7 @@ func canConnect(path []itineraryEdge, next itineraryEdge) bool {
 	}
 
 	previous := path[len(path)-1]
-	minimumDeparture := previous.stage.ArrivalAt
-	if previous.rideID != next.rideID {
-		minimumDeparture = minimumDeparture.Add(minimumConnectionTime)
-	}
-
-	return !next.stage.DepartureAt.Before(minimumDeparture)
+	return !next.stage.DepartureAt.Before(previous.stage.ArrivalAt)
 }
 
 func itineraryFromPath(path []itineraryEdge) protocol.ItineraryResponse {

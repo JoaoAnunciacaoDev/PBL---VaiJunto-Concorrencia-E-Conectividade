@@ -48,6 +48,22 @@ Todos se conectam a `localhost:8080`. Se o servidor estiver desligado, o cliente
 
 Você pode abrir vários clientes ao mesmo tempo. Isso é útil para testar uma disputa por assentos com diferentes passageiros.
 
+### Dados de teste
+
+Com o servidor em execução, o comando abaixo cria duas contas de motorista, duas contas de passageiro, veículos e duas caronas que se conectam em Salvador:
+
+```bash
+go run ./cmd/seed
+```
+
+Por padrão, as caronas são criadas para o dia seguinte. O comando informa a data ao terminar; para escolher outra, use `-date`:
+
+```bash
+go run ./cmd/seed -date 20/09/2026
+```
+
+Contas: `ana@gmail.com`, `bruno@gmail.com`, `alice@gmail.com` e `beto@gmail.com`. A senha de todas é `1234568Abc#`. O comando pode ser executado novamente: contas e veículos existentes são mantidos, e não publica nova carona para um motorista que já possua caronas.
+
 ## Roteiro de uso
 
 ### Exemplo: publicar uma carona
@@ -70,7 +86,7 @@ O número de assentos de um trecho não pode ultrapassar a capacidade do veícul
 3. Escolha origem, destino e a data da viagem no formato `dd/mm/aaaa`.
 4. Escolha o número de um itinerário exibido e confirme com `s`.
 
-Uma reserva pode ter mais de um trecho. O servidor só confirma a reserva se todos os trechos ainda tiverem assento; ele nunca confirma apenas parte do itinerário. Para trocar de carona, é exigido intervalo mínimo de 15 minutos.
+Uma reserva pode ter mais de um trecho. O servidor só confirma a reserva se todos os trechos ainda tiverem assento; ele nunca confirma apenas parte do itinerário. O trecho seguinte deve sair no mesmo instante ou depois da chegada do anterior.
 
 ### Outras operações disponíveis
 

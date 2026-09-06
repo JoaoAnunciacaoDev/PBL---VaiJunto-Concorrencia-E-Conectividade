@@ -32,9 +32,9 @@ func TestDriverSearchesDirectAndConnectedItineraries(t *testing.T) {
 	firstRide := itineraryTestRide(uuid.New(), time.Date(2026, time.September, 17, 8, 0, 0, 0, time.UTC), enum.Salvador, enum.FeiraDeSantana, time.Date(2026, time.September, 17, 8, 0, 0, 0, time.UTC), time.Date(2026, time.September, 17, 9, 30, 0, 0, time.UTC), 2500)
 	connectingRide := itineraryTestRide(uuid.New(), time.Date(2026, time.September, 17, 9, 45, 0, 0, time.UTC), enum.FeiraDeSantana, enum.Jequie, time.Date(2026, time.September, 17, 9, 45, 0, 0, time.UTC), time.Date(2026, time.September, 17, 11, 30, 0, 0, time.UTC), 3000)
 	directRide := itineraryTestRide(uuid.New(), time.Date(2026, time.September, 17, 10, 0, 0, 0, time.UTC), enum.Salvador, enum.Jequie, time.Date(2026, time.September, 17, 10, 0, 0, 0, time.UTC), time.Date(2026, time.September, 17, 13, 0, 0, 0, time.UTC), 7000)
-	tooSoonRide := itineraryTestRide(uuid.New(), time.Date(2026, time.September, 17, 9, 40, 0, 0, time.UTC), enum.FeiraDeSantana, enum.Jequie, time.Date(2026, time.September, 17, 9, 40, 0, 0, time.UTC), time.Date(2026, time.September, 17, 11, 20, 0, 0, time.UTC), 2000)
+	shortConnectionRide := itineraryTestRide(uuid.New(), time.Date(2026, time.September, 17, 9, 40, 0, 0, time.UTC), enum.FeiraDeSantana, enum.Jequie, time.Date(2026, time.September, 17, 9, 40, 0, 0, time.UTC), time.Date(2026, time.September, 17, 11, 20, 0, 0, time.UTC), 2000)
 
-	for _, ride := range []*models.Ride{firstRide, connectingRide, directRide, tooSoonRide} {
+	for _, ride := range []*models.Ride{firstRide, connectingRide, directRide, shortConnectionRide} {
 		if err := server.repository.SaveRide(ride); err != nil {
 			t.Fatalf("salvar carona de teste: %v", err)
 		}
@@ -54,6 +54,7 @@ func TestDriverSearchesDirectAndConnectedItineraries(t *testing.T) {
 
 	foundDirect := false
 	foundConnection := false
+	foundShortConnection := false
 	for _, itinerary := range itineraries {
 		if len(itinerary.Segments) == 1 && itinerary.Segments[0].RideID == directRide.ID {
 			foundDirect = true
@@ -64,10 +65,8 @@ func TestDriverSearchesDirectAndConnectedItineraries(t *testing.T) {
 				t.Errorf("preço da conexão = %d, esperado 5500", itinerary.TotalPriceCents)
 			}
 		}
-		for _, segment := range itinerary.Segments {
-			if segment.RideID == tooSoonRide.ID {
-				t.Fatal("conexão com intervalo menor que 15 minutos não deveria aparecer")
-			}
+		if len(itinerary.Segments) == 2 && itinerary.Segments[0].RideID == firstRide.ID && itinerary.Segments[1].RideID == shortConnectionRide.ID {
+			foundShortConnection = true
 		}
 	}
 
@@ -76,6 +75,9 @@ func TestDriverSearchesDirectAndConnectedItineraries(t *testing.T) {
 	}
 	if !foundConnection {
 		t.Fatal("itinerário com conexão válida deveria aparecer")
+	}
+	if !foundShortConnection {
+		t.Fatal("itinerário com conexão curta deveria aparecer")
 	}
 }
 

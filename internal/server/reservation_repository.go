@@ -199,8 +199,7 @@ func (r *Repository) CancelReservation(reservationID, passengerID uuid.UUID) err
 }
 
 type reservedStage struct {
-	rideID uuid.UUID
-	stage  *models.Stage
+	stage *models.Stage
 }
 
 type affectedReservation struct {
@@ -266,7 +265,7 @@ func (r *Repository) reservedStagesLocked(segments []models.ReservedSegment) ([]
 		found := false
 		for index := range ride.Segments {
 			if ride.Segments[index].ID == segment.SegmentID {
-				stages = append(stages, reservedStage{rideID: ride.ID, stage: &ride.Segments[index]})
+				stages = append(stages, reservedStage{stage: &ride.Segments[index]})
 				found = true
 				break
 			}
@@ -293,11 +292,7 @@ func reservedStagesFormItinerary(stages []reservedStage) bool {
 			return false
 		}
 
-		minimumDeparture := previous.stage.ArrivalAt
-		if previous.rideID != stage.rideID {
-			minimumDeparture = minimumDeparture.Add(minimumConnectionTime)
-		}
-		if stage.stage.DepartureAt.Before(minimumDeparture) {
+		if stage.stage.DepartureAt.Before(previous.stage.ArrivalAt) {
 			return false
 		}
 	}

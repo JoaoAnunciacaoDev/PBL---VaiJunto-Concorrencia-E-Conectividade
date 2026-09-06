@@ -427,7 +427,7 @@ Busca caminhos ativos que ligam origem e destino na data indicada.
 ]
 ```
 
-O servidor considera somente trechos com assentos disponíveis. Ao trocar de carona, a saída do próximo trecho deve ocorrer pelo menos 15 minutos depois da chegada anterior.
+O servidor considera somente trechos com assentos disponíveis. A saída do próximo trecho deve ocorrer no mesmo instante ou depois da chegada do trecho anterior.
 
 ### `confirm_reservation`
 
