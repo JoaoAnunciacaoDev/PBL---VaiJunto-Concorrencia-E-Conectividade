@@ -44,9 +44,51 @@ Abra outro terminal na raiz do projeto:
 go run ./cmd/api-client
 ```
 
-Todos se conectam a `localhost:8080`. Se o servidor estiver desligado, o cliente oferece as opções de tentar conectar novamente ou sair.
+Por padrão, o cliente se conecta a `localhost:8080`. Para usar um servidor em outra máquina ou porta, informe o endereço:
+
+```bash
+go run ./cmd/api-client -addr 192.168.1.50:8080
+```
+
+Se o servidor estiver desligado, o cliente oferece as opções de tentar conectar novamente ou sair.
 
 Você pode abrir vários clientes ao mesmo tempo. Isso é útil para testar uma disputa por assentos com diferentes passageiros.
+
+## Execução com Docker
+
+Crie a imagem e inicie o servidor:
+
+```bash
+docker compose -f docker/docker-compose.yaml build server
+docker compose -f docker/docker-compose.yaml up -d server
+```
+
+O servidor publica a porta TCP `8080` e mantém dados e logs no volume nomeado `vaijunto-storage`. Para criar os dados de demonstração e abrir clientes interativos na mesma máquina:
+
+```bash
+docker compose -f docker/docker-compose.yaml run --rm seed
+docker compose -f docker/docker-compose.yaml run --rm client
+```
+
+O mesmo cliente atende os perfis motorista e passageiro. Abra outros terminais e repita o último comando para usar vários clientes simultaneamente.
+
+### Contêineres em computadores distintos
+
+No computador do servidor, inicie somente o serviço `server` e descubra o seu endereço IPv4 na rede local. Garanta que conexões TCP de entrada para a porta `8080` estejam liberadas no firewall.
+
+No computador cliente, depois de construir ou obter a mesma imagem, conecte diretamente ao IP do servidor:
+
+```bash
+docker run --rm -it vaijunto:local /app/bin/api-client -addr 192.168.1.50:8080
+```
+
+Substitua `192.168.1.50` pelo IP real do computador servidor. Não use `localhost`: dentro do contêiner ele aponta para o próprio contêiner cliente.
+
+Para encerrar o servidor sem apagar os dados:
+
+```bash
+docker compose -f docker/docker-compose.yaml down
+```
 
 ### Dados de teste
 

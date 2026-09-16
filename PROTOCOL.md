@@ -1,6 +1,6 @@
 # Protocolo TCP/JSON do VaiJunto
 
-Este documento descreve as mensagens aceitas pelo servidor do VaiJunto. Ele é a referência para os clientes conversarem com o servidor sem depender da implementação em Go.
+Este documento descreve as mensagens aceitas pelo servidor do VaiJunto. Ele é a referência para os clientes conversarem com o servidor sem depender do conhecimento da implementação em Go.
 
 ## Transporte e enquadramento
 

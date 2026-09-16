@@ -1,36 +1,42 @@
 services:
-  # Servidor Central de Caronas (TCP)
   server:
+    image: vaijunto:local
     build:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: vaijunto-server
+    command: ["/app/bin/api-server", "-data-dir", "/app/storage/data"]
     ports:
       - "8080:8080"
     volumes:
-      - ../internal/data:/app/internal/data
+      - vaijunto-storage:/app/storage
+    healthcheck:
+      # Confere o socket em escuta sem abrir conexões artificiais que
+      # apareceriam como sessões de clientes nos logs do servidor.
+      test: ["CMD-SHELL", "netstat -ltn | grep -q ':8080 '"]
+      interval: 2s
+      timeout: 1s
+      retries: 15
+      start_period: 2s
     restart: unless-stopped
 
-  # Cliente Motorista Interativo (Terminal)
-  driver-client:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    container_name: vaijunto-driver
-    command: ["/app/bin/driver-client", "-addr=server:8080"]
+  # Um único cliente permite cadastrar e usar os perfis de motorista e
+  # passageiro. Execute com: docker compose run --rm client
+  client:
+    image: vaijunto:local
+    command: ["/app/bin/api-client", "-addr=server:8080"]
     depends_on:
-      - server
+      server:
+        condition: service_healthy
     stdin_open: true
     tty: true
 
-  # Cliente Passageiro Interativo (Terminal)
-  passenger-client:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    container_name: vaijunto-passenger
-    command: ["/app/bin/passenger-client", "-addr=server:8080"]
+  seed:
+    image: vaijunto:local
+    command: ["/app/bin/seed", "-addr=server:8080"]
     depends_on:
-      - server
-    stdin_open: true
-    tty: true
+      server:
+        condition: service_healthy
+
+volumes:
+  vaijunto-storage:
