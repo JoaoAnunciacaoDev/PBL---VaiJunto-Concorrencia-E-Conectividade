@@ -8,8 +8,11 @@ Este documento descreve as mensagens aceitas pelo servidor do VaiJunto. Ele é a
 - Codificação: UTF-8.
 - Formato: JSON.
 - Cada objeto JSON é enviado como uma mensagem. O projeto usa `json.Encoder`, que termina cada objeto com quebra de linha (`\n`); portanto, envie um objeto por linha e leia uma resposta por linha.
+- Cada requisição pode ocupar no máximo 5 MiB, sem contar a quebra de linha delimitadora. Ao exceder o limite, o servidor responde com erro quando a conexão ainda permite escrita e encerra a conexão.
+- A decodificação é estrita: `action` é obrigatório, campos desconhecidos são rejeitados e não pode existir um segundo valor ou outro conteúdo depois do objeto JSON na mesma linha.
 - A conexão permanece aberta para várias requisições. As requisições de uma mesma conexão são processadas em sequência.
 - Ao conectar, o servidor cria uma sessão anônima. O `login` associa um usuário àquela conexão; não existe token no JSON. Ao fechar a conexão ou executar `logout`, a sessão deixa de estar autenticada.
+- O servidor renova um timeout de leitura ociosa de 5 minutos antes de cada mensagem e usa timeout de escrita de 10 segundos para cada resposta. Uma conexão ociosa é avisada e encerrada sem afetar os outros clientes.
 
 Datas e horários seguem o formato JSON padrão de `time.Time` do Go: RFC 3339, por exemplo `"2026-09-17T08:00:00Z"`.
 
@@ -32,6 +35,8 @@ Para ações sem corpo, envie `null` no payload:
 ```json
 {"action":"logout","payload":null}
 ```
+
+Os campos aceitos em cada `payload` são exatamente os documentados nas ações abaixo. Tipos incorretos, campos adicionais, JSON truncado ou `action` ausente produzem uma resposta com `"success":"error"`. Erros no enquadramento da mensagem, excesso de tamanho e timeout encerram a conexão após a tentativa de envio da resposta de erro; erros de regra de negócio mantêm a conexão aberta.
 
 ## Envelope de resposta
 

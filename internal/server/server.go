@@ -1,19 +1,30 @@
 package server
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"time"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
+)
+
+const (
+	defaultReadIdleTimeout = 5 * time.Minute
+	defaultWriteTimeout    = 10 * time.Second
 )
 
 type Server struct {
 	addr       string
 	repository *Repository
+
+	readIdleTimeout time.Duration
+	writeTimeout    time.Duration
+	maxRequestSize  int
 }
 
 // NewServer cria uma nova instância do servidor com o endereço e o caminho para o arquivo de usuários fornecidos.
@@ -27,8 +38,11 @@ func NewServer(addr, usersPath string) (*Server, error) {
 	}
 
 	return &Server{
-		addr:       addr,
-		repository: repository,
+		addr:            addr,
+		repository:      repository,
+		readIdleTimeout: defaultReadIdleTimeout,
+		writeTimeout:    defaultWriteTimeout,
+		maxRequestSize:  protocol.MaxRequestSize,
 	}, nil
 }
 
@@ -61,7 +75,7 @@ func (s *Server) Start() error {
 // Ele lê solicitações JSON do cliente, processa as solicitações e envia respostas JSON de volta.
 // O loop continua até que o cliente se desconecte ou ocorra um erro.
 func (s *Server) handleConnection(conn net.Conn) {
-	decoder := json.NewDecoder(conn)
+	reader := bufio.NewReader(conn)
 	encoder := json.NewEncoder(conn)
 	session := NewSession()
 	remoteAddress := conn.RemoteAddr().String()
@@ -75,9 +89,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	for {
 		var request protocol.Request
-		// Lê a solicitação JSON do cliente. apenas executa o restante do código
-		// se houver o que ler e não houver erro na leitura da solicitação.
-		err := protocol.ReadJson(decoder, &request)
+		if err := conn.SetReadDeadline(time.Now().Add(s.readIdleTimeout)); err != nil {
+			log.Printf("read deadline failed remote=%s session=%s error=%v", remoteAddress, session.ID, err)
+			return
+		}
+
+		err := protocol.ReadMessage(reader, s.maxRequestSize, &request)
 
 		if err != nil {
 			if errors.Is(err, io.EOF) {
@@ -85,7 +102,16 @@ func (s *Server) handleConnection(conn net.Conn) {
 				return
 			}
 
+			message := "Mensagem de protocolo inválida: " + err.Error()
+			if netError, ok := err.(net.Error); ok && netError.Timeout() {
+				message = "Conexão encerrada por tempo limite de leitura."
+			}
 			log.Printf("request read failed remote=%s session=%s error=%v", remoteAddress, session.ID, err)
+			_ = s.sendResponse(conn, encoder, protocol.Response{Success: "error", Message: message})
+			return
+		}
+		if request.Action == "" {
+			_ = s.sendResponse(conn, encoder, protocol.Response{Success: "error", Message: "Mensagem de protocolo inválida: action é obrigatória."})
 			return
 		}
 
@@ -101,11 +127,19 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		log.Printf("request action=%s session=%s user=%q result=%s", request.Action, session.ID, userName, res.Success)
 
-		if err := protocol.SendJson(encoder, res); err != nil {
+		if err := s.sendResponse(conn, encoder, res); err != nil {
 			log.Printf("response send failed remote=%s session=%s user=%q error=%v", remoteAddress, session.ID, userName, err)
 			return
 		}
 	}
+}
+
+func (s *Server) sendResponse(conn net.Conn, encoder *json.Encoder, response protocol.Response) error {
+	if err := conn.SetWriteDeadline(time.Now().Add(s.writeTimeout)); err != nil {
+		return err
+	}
+	defer conn.SetWriteDeadline(time.Time{})
+	return protocol.SendJson(encoder, response)
 }
 
 func (s *Server) processRequest(request protocol.Request, session *Session) protocol.Response {

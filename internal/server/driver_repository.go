@@ -3,7 +3,6 @@ package server
 import (
 	"errors"
 	"fmt"
-	"sort"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
@@ -22,7 +21,7 @@ func (r *Repository) loadDrivers() error {
 	}
 
 	for _, stored := range drivers {
-		if stored.UserID == uuid.Nil || stored.Vehicle == nil {
+		if stored.UserID == uuid.Nil {
 			return errors.New("arquivo de motoristas contém um registro inválido")
 		}
 
@@ -34,36 +33,15 @@ func (r *Repository) loadDrivers() error {
 			return errors.New("arquivo de motoristas contém registros duplicados")
 		}
 
-		vehicleCopy := *stored.Vehicle
-		r.drivers[stored.UserID] = &models.Driver{
-			User:    *user,
-			Vehicle: &vehicleCopy,
+		driver := &models.Driver{User: *user}
+		if stored.Vehicle != nil {
+			vehicleCopy := *stored.Vehicle
+			driver.Vehicle = &vehicleCopy
 		}
+		r.drivers[stored.UserID] = driver
 	}
 
 	return nil
-}
-
-func (r *Repository) saveDriversLocked() error {
-	drivers := make([]storedDriver, 0, len(r.drivers))
-	for _, driver := range r.drivers {
-		var vehicle *models.Vehicle
-		if driver.Vehicle != nil {
-			vehicleCopy := *driver.Vehicle
-			vehicle = &vehicleCopy
-		}
-
-		drivers = append(drivers, storedDriver{
-			UserID:  driver.ID,
-			Vehicle: vehicle,
-		})
-	}
-
-	sort.Slice(drivers, func(i, j int) bool {
-		return drivers[i].UserID.String() < drivers[j].UserID.String()
-	})
-
-	return writeJSONFileAtomic(r.driversPath, ".drivers-*.tmp", drivers)
 }
 
 func (r *Repository) SaveDriver(driver *models.Driver) error {
@@ -76,7 +54,7 @@ func (r *Repository) SaveDriver(driver *models.Driver) error {
 
 	oldDriver, existed := r.drivers[driver.ID]
 	r.drivers[driver.ID] = cloneDriver(driver)
-	if err := r.saveDriversLocked(); err != nil {
+	if err := r.saveStateLocked(); err != nil {
 		if existed {
 			r.drivers[driver.ID] = oldDriver
 		} else {
@@ -120,7 +98,7 @@ func (r *Repository) UpdateDriverVehicle(driverID uuid.UUID, vehicle models.Vehi
 
 	previousVehicle := *driver.Vehicle
 	driver.Vehicle = &vehicle
-	if err := r.saveDriversLocked(); err != nil {
+	if err := r.saveStateLocked(); err != nil {
 		driver.Vehicle = &previousVehicle
 		return fmt.Errorf("salvar veículo: %w", err)
 	}
@@ -145,7 +123,7 @@ func (r *Repository) RemoveDriverVehicle(driverID uuid.UUID) error {
 
 	previousVehicle := driver.Vehicle
 	driver.Vehicle = nil
-	if err := r.saveDriversLocked(); err != nil {
+	if err := r.saveStateLocked(); err != nil {
 		driver.Vehicle = previousVehicle
 		return fmt.Errorf("remover veículo: %w", err)
 	}

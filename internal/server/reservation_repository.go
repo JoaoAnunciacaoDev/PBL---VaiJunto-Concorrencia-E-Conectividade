@@ -32,19 +32,6 @@ func (r *Repository) loadReservations() error {
 	return nil
 }
 
-func (r *Repository) saveReservationsLocked() error {
-	reservations := make([]models.Reservation, 0, len(r.reservations))
-	for _, reservation := range r.reservations {
-		reservations = append(reservations, *reservation)
-	}
-
-	sort.Slice(reservations, func(i, j int) bool {
-		return reservations[i].CreatedAt.Before(reservations[j].CreatedAt)
-	})
-
-	return writeJSONFileAtomic(r.reservationsPath, ".reservations-*.tmp", reservations)
-}
-
 func (r *Repository) ConfirmReservation(passengerID uuid.UUID, segments []models.ReservedSegment) (*models.Reservation, error) {
 	if passengerID == uuid.Nil || len(segments) == 0 {
 		return nil, errors.New("reserva inválida")
@@ -84,16 +71,10 @@ func (r *Repository) ConfirmReservation(passengerID uuid.UUID, segments []models
 	}
 	r.reservations[reservation.ID] = reservation
 
-	if err := r.saveRidesLocked(); err != nil {
+	if err := r.saveStateLocked(); err != nil {
 		r.restoreSeats(stages)
 		delete(r.reservations, reservation.ID)
-		return nil, fmt.Errorf("salvar assentos: %w", err)
-	}
-	if err := r.saveReservationsLocked(); err != nil {
-		r.restoreSeats(stages)
-		delete(r.reservations, reservation.ID)
-		_ = r.saveRidesLocked()
-		return nil, fmt.Errorf("salvar reserva: %w", err)
+		return nil, fmt.Errorf("salvar reserva e assentos: %w", err)
 	}
 
 	return cloneReservation(reservation), nil
@@ -183,16 +164,10 @@ func (r *Repository) CancelReservation(reservationID, passengerID uuid.UUID) err
 	}
 
 	reservation.Status = enum.Cancelada
-	if err := r.saveRidesLocked(); err != nil {
+	if err := r.saveStateLocked(); err != nil {
 		r.restoreSeats(stages)
 		reservation.Status = enum.Confirmada
-		return fmt.Errorf("devolver assentos: %w", err)
-	}
-	if err := r.saveReservationsLocked(); err != nil {
-		r.restoreSeats(stages)
-		reservation.Status = enum.Confirmada
-		_ = r.saveRidesLocked()
-		return fmt.Errorf("salvar cancelamento: %w", err)
+		return fmt.Errorf("salvar cancelamento e assentos: %w", err)
 	}
 
 	return nil

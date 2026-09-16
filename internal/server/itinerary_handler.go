@@ -26,7 +26,7 @@ func (s *Server) handleSearchItineraries(payload json.RawMessage, session *Sessi
 	}
 
 	var dto protocol.SearchItinerariesRequest
-	if err := json.Unmarshal(payload, &dto); err != nil {
+	if err := protocol.UnmarshalStrict(payload, &dto); err != nil {
 		return protocol.Response{Success: "error", Message: "Requisição inválida: " + err.Error()}
 	}
 	if !dto.Origin.IsValid() || !dto.Destination.IsValid() || dto.Origin == dto.Destination || dto.Date.IsZero() {

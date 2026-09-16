@@ -3,10 +3,10 @@ package client
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/utils"
+	"io"
 )
 
 type TerminalOptions struct {

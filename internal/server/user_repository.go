@@ -3,7 +3,6 @@ package server
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
@@ -46,25 +45,6 @@ func (r *Repository) loadUsers() error {
 	return nil
 }
 
-func (r *Repository) saveUsersLocked() error {
-	users := make([]storedUser, 0, len(r.users))
-	for _, user := range r.users {
-		users = append(users, storedUser{
-			ID:           user.ID,
-			Name:         user.Name,
-			Email:        user.Email,
-			PasswordHash: user.PasswordHash,
-			Role:         user.Role,
-		})
-	}
-
-	sort.Slice(users, func(i, j int) bool {
-		return users[i].Email < users[j].Email
-	})
-
-	return writeJSONFileAtomic(r.usersPath, ".users-*.tmp", users)
-}
-
 func (r *Repository) SaveUser(user *models.User) error {
 	if user == nil || user.ID == uuid.Nil || (user.Role != models.RolePassenger && user.Role != models.RoleDriver) {
 		return errors.New("usuário inválido")
@@ -81,7 +61,7 @@ func (r *Repository) SaveUser(user *models.User) error {
 	}
 
 	r.users[normalizedEmail] = cloneUser(user)
-	if err := r.saveUsersLocked(); err != nil {
+	if err := r.saveStateLocked(); err != nil {
 		delete(r.users, normalizedEmail)
 		return fmt.Errorf("salvar usuário: %w", err)
 	}

@@ -4,6 +4,8 @@ Aplicação de caronas compartilhadas construída em Go para a disciplina de Con
 
 O sistema permite que motoristas publiquem caronas com vários trechos e que passageiros encontrem itinerários, reservem seus trechos e cancelem reservas. O repositório protege as reservas concorrentes para que um assento não seja vendido duas vezes.
 
+O [diagrama de arquitetura](diagrams/ArchitectureDiagram.md) mostra o fluxo entre clientes, conexões TCP, sessões, handlers, repositório concorrente e persistência atômica. O [roteiro de apresentação](PRESENTATION.md) organiza uma demonstração completa em 20 minutos.
+
 ## Pré-requisitos
 
 - Go 1.27 ou compatível com o projeto
@@ -60,7 +62,7 @@ Crie a imagem e inicie o servidor:
 
 ```bash
 docker compose -f docker/docker-compose.yaml build server
-docker compose -f docker/docker-compose.yaml up -d server
+docker compose -f docker/docker-compose.yaml up -d --wait server
 ```
 
 O servidor publica a porta TCP `8080` e mantém dados e logs no volume nomeado `vaijunto-storage`. Para criar os dados de demonstração e abrir clientes interativos na mesma máquina:
@@ -72,17 +74,51 @@ docker compose -f docker/docker-compose.yaml run --rm client
 
 O mesmo cliente atende os perfis motorista e passageiro. Abra outros terminais e repita o último comando para usar vários clientes simultaneamente.
 
-### Contêineres em computadores distintos
+O cliente não possui dependência obrigatória do serviço `server`. Na mesma máquina, `server:8080` é usado como padrão e resolvido pelo DNS interno do Docker. Em outro computador, o endereço pode ser informado pela variável `VAIJUNTO_SERVER_ADDR` sem iniciar um servidor local.
 
-No computador do servidor, inicie somente o serviço `server` e descubra o seu endereço IPv4 na rede local. Garanta que conexões TCP de entrada para a porta `8080` estejam liberadas no firewall.
+### Porta exclusiva no computador servidor
 
-No computador cliente, depois de construir ou obter a mesma imagem, conecte diretamente ao IP do servidor:
+A porta interna do contêiner é sempre `8080`, mas a porta publicada no computador pode ser escolhida com `VAIJUNTO_HOST_PORT`. No PowerShell:
 
-```bash
-docker run --rm -it vaijunto:local /app/bin/api-client -addr 192.168.1.50:8080
+```powershell
+$env:VAIJUNTO_HOST_PORT="18042"
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml up -d --build --wait server
 ```
 
-Substitua `192.168.1.50` pelo IP real do computador servidor. Não use `localhost`: dentro do contêiner ele aponta para o próprio contêiner cliente.
+O nome informado em `-p` também torna exclusivos os nomes de rede, contêiner e volume desse projeto. Outros projetos podem usar suas próprias portas e nomes no mesmo computador.
+
+### Contêineres em computadores distintos
+
+No computador do servidor, escolha uma porta, inicie somente o serviço `server` e descubra o endereço IPv4 da máquina na rede local:
+
+```powershell
+$env:VAIJUNTO_HOST_PORT="18042"
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml up -d --build --wait server
+```
+
+Garanta que conexões TCP de entrada para a porta escolhida estejam liberadas no firewall.
+
+No computador cliente, construa a imagem sem iniciar o servidor:
+
+```powershell
+docker compose -f docker/docker-compose.yaml build server
+```
+
+Em seguida, informe o IP e a porta publicados pelo computador servidor e execute somente o cliente:
+
+
+```powershell
+$env:VAIJUNTO_SERVER_ADDR="192.168.1.50:18042"
+docker compose -p vaijunto-cliente -f docker/docker-compose.yaml run --rm client
+```
+
+O serviço `client` não possui `depends_on`; portanto, esse comando não cria um servidor no computador cliente. Como alternativa, a mesma imagem pode ser executada sem Compose:
+
+```bash
+docker run --rm -it vaijunto:local /app/bin/api-client -addr 192.168.1.50:18042
+```
+
+Substitua `192.168.1.50` e `18042` pelo IP e pela porta reais do computador servidor. Não use `localhost`: dentro do contêiner ele aponta para o próprio contêiner cliente.
 
 Para encerrar o servidor sem apagar os dados:
 
@@ -152,15 +188,16 @@ Um veículo não pode ser removido enquanto o motorista possuir caronas ativas. 
 
 ## Persistência local
 
-O projeto não usa banco de dados. Por padrão, o servidor localiza a raiz do projeto (a pasta que contém `go.mod`) e salva os dados em arquivos JSON legíveis na pasta `data/`, criando-a quando for necessário. Ao iniciar, ele informa no log o caminho usado:
+O projeto não usa banco de dados. Por padrão, o servidor localiza a raiz do projeto (a pasta que contém `go.mod`) e salva todo o estado em um único JSON na pasta `data/`, criando-a quando for necessário. Ao iniciar, ele informa no log o caminho usado:
 
 ```text
 data/
-├── users.json
-├── drivers.json
-├── rides.json
-└── reservations.json
+└── state.json
 ```
+
+`state.json` possui versão de formato e reúne usuários, motoristas, caronas e reservas. Cada alteração é serializada em um arquivo temporário, sincronizada com `Sync`, fechada e promovida com um único rename atômico. Assim, a confirmação de uma reserva e a redução dos assentos nunca ficam separadas em arquivos diferentes.
+
+Na primeira execução após uma versão antiga do projeto, se `state.json` ainda não existir, o servidor lê `users.json`, `drivers.json`, `rides.json` e `reservations.json` e cria automaticamente o estado unificado. Depois da migração, `state.json` passa a ser a fonte de verdade.
 
 Para usar conscientemente outra pasta — por exemplo, ao testar dados isolados — informe `-data-dir`:
 
@@ -176,7 +213,9 @@ Os logs aparecem no terminal e também são acrescentados em `logs/server.log`, 
 
 ## Comunicação TCP e JSON
 
-TCP é o transporte: ele entrega uma sequência de bytes confiável entre cliente e servidor. JSON é o formato escolhido para representar as mensagens nesses bytes. O projeto usa `json.Encoder` e `json.Decoder`, que enviam e leem um objeto JSON por vez na mesma conexão TCP.
+TCP é o transporte: ele entrega uma sequência de bytes confiável entre cliente e servidor. JSON é o formato escolhido para representar as mensagens nesses bytes. Cada objeto ocupa uma linha, possui limite de 5 MiB e é decodificado de forma estrita. O servidor rejeita campos desconhecidos, conteúdo adicional, mensagens truncadas e requisições sem `action`.
+
+O servidor renova um timeout ocioso de leitura de 5 minutos a cada requisição e limita a escrita de cada resposta a 10 segundos. Um cliente parado ou malformado perde apenas a própria conexão; as demais goroutines continuam atendendo normalmente.
 
 Toda requisição possui a estrutura:
 
@@ -219,10 +258,21 @@ Execute todos os testes automatizados com:
 go test ./...
 ```
 
-Além de testes de modelos, persistência e regras de negócio, há um teste de integração TCP que abre 24 clientes independentes. Eles fazem login e disputam simultaneamente o mesmo último assento. O resultado esperado é exatamente uma reserva confirmada, sem venda duplicada.
+Além de testes de modelos, persistência e regras de negócio, há testes de integração TCP que:
+
+- abrem 24 clientes independentes disputando o último assento, exigindo exatamente um sucesso e 23 recusas;
+- reabrem `state.json` para confirmar que existe somente uma reserva persistida;
+- tentam reservar um itinerário de dois trechos cujo último trecho está indisponível e comprovam que nenhum trecho foi alterado;
+- calculam mínimo, média, p50, p95, máximo e throughput das confirmações concorrentes;
+- enviam JSON truncado, campos desconhecidos, payload inválido, mensagem acima do limite e conexão ociosa;
+- simulam falha depois do `Sync` e antes do rename de `state.json`.
 
 Para executar apenas esse teste de concorrência TCP:
 
 ```bash
-go test ./internal/server -run TestTCPConcurrentClientsReserveLastSeat -v
+go test ./internal/server -run TestTCP -count=10 -v
 ```
+
+As métricas são impressas com `t.Logf` e são informativas: não há um limite rígido dependente da velocidade da máquina. O critério funcional permanece invariável em todas as execuções: nunca pode haver mais reservas confirmadas que assentos disponíveis.
+
+Em uma execução local de referência no Windows, com dez repetições de 24 clientes, todas mantiveram 1 sucesso e 23 recusas. A latência média por repetição ficou entre aproximadamente 2 ms e 26 ms e o throughput observado entre 900 e 11,9 mil requisições por segundo; a maior latência ocorreu na primeira execução (aquecimento). Esses números descrevem somente a máquina de teste, incluem a resolução do relógio do ambiente e devem ser medidos novamente no laboratório.

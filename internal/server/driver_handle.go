@@ -113,7 +113,7 @@ func (s *Server) driverForSession(session *Session, requiresVehicle bool) (*mode
 func vehicleFromPayload(payload json.RawMessage) (models.Vehicle, protocol.Response, bool) {
 	var dto protocol.CreateVehicleRequest
 
-	if err := json.Unmarshal(payload, &dto); err != nil {
+	if err := protocol.UnmarshalStrict(payload, &dto); err != nil {
 		return models.Vehicle{}, protocol.Response{Success: "error", Message: "Requisição inválida: " + err.Error()}, false
 	}
 

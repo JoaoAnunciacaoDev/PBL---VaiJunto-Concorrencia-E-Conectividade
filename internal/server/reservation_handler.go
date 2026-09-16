@@ -15,7 +15,7 @@ func (s *Server) handleConfirmReservation(payload json.RawMessage, session *Sess
 	}
 
 	var dto protocol.ConfirmReservationRequest
-	if err := json.Unmarshal(payload, &dto); err != nil {
+	if err := protocol.UnmarshalStrict(payload, &dto); err != nil {
 		return protocol.Response{Success: "error", Message: "Requisição inválida: " + err.Error()}
 	}
 
@@ -93,7 +93,7 @@ func (s *Server) handleCancelReservation(payload json.RawMessage, session *Sessi
 	}
 
 	var dto protocol.CancelReservationRequest
-	if err := json.Unmarshal(payload, &dto); err != nil || dto.ReservationID == uuid.Nil {
+	if err := protocol.UnmarshalStrict(payload, &dto); err != nil || dto.ReservationID == uuid.Nil {
 		return protocol.Response{Success: "error", Message: "Identificador da reserva inválido."}
 	}
 

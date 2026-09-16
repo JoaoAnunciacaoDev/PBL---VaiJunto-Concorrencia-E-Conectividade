@@ -12,7 +12,7 @@ import (
 func (s *Server) handleRegisterUser(payload json.RawMessage) protocol.Response {
 	var dto protocol.CreateUserRequest
 
-	if err := json.Unmarshal(payload, &dto); err != nil {
+	if err := protocol.UnmarshalStrict(payload, &dto); err != nil {
 		return protocol.Response{
 			Success: "error",
 			Message: "Requisição inválida: " + err.Error(),
@@ -28,7 +28,7 @@ func (s *Server) handleRegisterUser(payload json.RawMessage) protocol.Response {
 			Message: "Nome é obrigatório.",
 		}
 	}
-	
+
 	if dto.Role != models.RolePassenger && dto.Role != models.RoleDriver {
 		return protocol.Response{Success: "error", Message: "Perfil de usuário inválido."}
 	}
@@ -77,7 +77,7 @@ func (s *Server) handleRegisterUser(payload json.RawMessage) protocol.Response {
 func (s *Server) handleLogin(payload json.RawMessage, session *Session) protocol.Response {
 	var dto protocol.LoginRequest
 
-	if err := json.Unmarshal(payload, &dto); err != nil {
+	if err := protocol.UnmarshalStrict(payload, &dto); err != nil {
 		return protocol.Response{
 			Success: "error",
 			Message: "Requisição inválida: " + err.Error(),

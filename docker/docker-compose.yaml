@@ -4,10 +4,9 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: vaijunto-server
     command: ["/app/bin/api-server", "-data-dir", "/app/storage/data"]
     ports:
-      - "8080:8080"
+      - "${VAIJUNTO_HOST_PORT:-8080}:8080"
     volumes:
       - vaijunto-storage:/app/storage
     healthcheck:
@@ -24,10 +23,7 @@ services:
   # passageiro. Execute com: docker compose run --rm client
   client:
     image: vaijunto:local
-    command: ["/app/bin/api-client", "-addr=server:8080"]
-    depends_on:
-      server:
-        condition: service_healthy
+    command: ["/app/bin/api-client", "-addr=${VAIJUNTO_SERVER_ADDR:-server:8080}"]
     stdin_open: true
     tty: true
 

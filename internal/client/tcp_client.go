@@ -38,7 +38,7 @@ func (c *TCPClient) Send(request protocol.Request) (protocol.Response, error) {
 	if err := c.conn.SetDeadline(time.Now().Add(requestTimeout)); err != nil {
 		return protocol.Response{}, fmt.Errorf("definir tempo limite: %w", err)
 	}
-	
+
 	defer c.conn.SetDeadline(time.Time{})
 
 	if err := protocol.SendJson(c.encoder, request); err != nil {

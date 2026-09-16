@@ -16,7 +16,7 @@ func (s *Server) handleCreateRide(payload json.RawMessage, session *Session) pro
 	}
 
 	var dto protocol.CreateRideRequest
-	if err := json.Unmarshal(payload, &dto); err != nil {
+	if err := protocol.UnmarshalStrict(payload, &dto); err != nil {
 		return protocol.Response{Success: "error", Message: "Requisição inválida: " + err.Error()}
 	}
 
@@ -84,7 +84,7 @@ func (s *Server) handleCancelRide(payload json.RawMessage, session *Session) pro
 	}
 
 	var dto protocol.CancelRideRequest
-	if err := json.Unmarshal(payload, &dto); err != nil || dto.RideID == uuid.Nil {
+	if err := protocol.UnmarshalStrict(payload, &dto); err != nil || dto.RideID == uuid.Nil {
 		return protocol.Response{Success: "error", Message: "Identificador da carona inválido."}
 	}
 

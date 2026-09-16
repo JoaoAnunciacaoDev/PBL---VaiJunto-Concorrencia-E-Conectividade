@@ -24,7 +24,7 @@ func readJSONFile(path string, destination any) error {
 	return nil
 }
 
-func writeJSONFileAtomic(path, temporaryPrefix string, value any) error {
+func writeJSONFileAtomic(path, temporaryPrefix string, value any, beforeRename func() error) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return fmt.Errorf("serializar JSON: %w", err)
@@ -48,8 +48,17 @@ func writeJSONFileAtomic(path, temporaryPrefix string, value any) error {
 		temporaryFile.Close()
 		return fmt.Errorf("gravar arquivo temporário: %w", err)
 	}
+	if err := temporaryFile.Sync(); err != nil {
+		temporaryFile.Close()
+		return fmt.Errorf("sincronizar arquivo temporário: %w", err)
+	}
 	if err := temporaryFile.Close(); err != nil {
 		return fmt.Errorf("fechar arquivo temporário: %w", err)
+	}
+	if beforeRename != nil {
+		if err := beforeRename(); err != nil {
+			return fmt.Errorf("interromper antes da substituição: %w", err)
+		}
 	}
 
 	if err := os.Rename(temporaryPath, path); err != nil {

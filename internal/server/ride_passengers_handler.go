@@ -14,7 +14,7 @@ func (s *Server) handleGetRidePassengers(payload json.RawMessage, session *Sessi
 	}
 
 	var dto protocol.GetRidePassengersRequest
-	if err := json.Unmarshal(payload, &dto); err != nil || dto.RideID == uuid.Nil {
+	if err := protocol.UnmarshalStrict(payload, &dto); err != nil || dto.RideID == uuid.Nil {
 		return protocol.Response{Success: "error", Message: "Identificador da carona inválido."}
 	}
 

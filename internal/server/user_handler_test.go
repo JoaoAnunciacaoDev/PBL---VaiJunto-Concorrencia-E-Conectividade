@@ -316,9 +316,9 @@ func TestRegisterUserPersistsDataAcrossServerRestart(t *testing.T) {
 		t.Fatalf("cadastro deveria funcionar, recebeu: %s", response.Message)
 	}
 
-	content, err := os.ReadFile(usersPath)
+	content, err := os.ReadFile(filepath.Join(filepath.Dir(usersPath), "state.json"))
 	if err != nil {
-		t.Fatalf("arquivo de usuários deveria existir: %v", err)
+		t.Fatalf("arquivo de estado deveria existir: %v", err)
 	}
 	if strings.Contains(string(content), registration.Password) {
 		t.Fatal("arquivo de usuários não deve guardar a senha em texto puro")
