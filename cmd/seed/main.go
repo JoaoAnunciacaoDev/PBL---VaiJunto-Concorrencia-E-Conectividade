@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	seedPassword = "1234568Abc#"
+	seedPassword = "12345678Abc#"
 	dateLayout   = "02/01/2006"
 )
 
@@ -64,6 +64,7 @@ func main() {
 	fmt.Println("Motoristas: ana@gmail.com e bruno@gmail.com")
 	fmt.Println("Passageiros: alice@gmail.com e beto@gmail.com")
 	fmt.Printf("Senha de todas as contas: %s\n", seedPassword)
+	fmt.Println("Demonstração de conexão: Alagoinhas -> Feira de Santana com Ana; Feira de Santana -> Lauro de Freitas com Bruno.")
 }
 
 func registerUser(address string, user seedUser) error {
@@ -151,9 +152,11 @@ func ensureRide(tcpClient *client.TCPClient, ride protocol.CreateRideRequest) er
 	if err := json.Unmarshal(response.Payload, &rides); err != nil {
 		return fmt.Errorf("interpretar caronas existentes: %w", err)
 	}
-	if len(rides) > 0 {
-		fmt.Println("Caronas de teste mantidas: o motorista já possui carona publicada.")
-		return nil
+	for _, existingRide := range rides {
+		if sameSeedRide(existingRide, ride) {
+			fmt.Println("Carona de teste mantida: a mesma rota já está publicada.")
+			return nil
+		}
 	}
 
 	response, err = send(tcpClient, protocol.ActionCreateRide, ride)
@@ -167,6 +170,25 @@ func ensureRide(tcpClient *client.TCPClient, ride protocol.CreateRideRequest) er
 	return nil
 }
 
+func sameSeedRide(existing models.Ride, expected protocol.CreateRideRequest) bool {
+	if !existing.DepartureAt.Equal(expected.DepartureAt) || len(existing.Segments) != len(expected.Segments) {
+		return false
+	}
+
+	for index, expectedStage := range expected.Segments {
+		existingStage := existing.Segments[index]
+		if existingStage.Origin != expectedStage.Origin ||
+			existingStage.Destination != expectedStage.Destination ||
+			!existingStage.DepartureAt.Equal(expectedStage.DepartureAt) ||
+			!existingStage.ArrivalAt.Equal(expectedStage.ArrivalAt) ||
+			existingStage.PriceCents != expectedStage.PriceCents {
+			return false
+		}
+	}
+
+	return true
+}
+
 func send(tcpClient *client.TCPClient, action protocol.Action, body any) (protocol.Response, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -176,27 +198,29 @@ func send(tcpClient *client.TCPClient, action protocol.Action, body any) (protoc
 }
 
 func anaRide(date time.Time) protocol.CreateRideRequest {
-	departure := time.Date(date.Year(), date.Month(), date.Day(), 8, 0, 0, 0, time.Local)
-	arrivalSalvador := departure.Add(90 * time.Minute)
-	arrivalLauro := arrivalSalvador.Add(30 * time.Minute)
+	departure := time.Date(date.Year(), date.Month(), date.Day(), 7, 0, 0, 0, time.Local)
+	arrivalFeira := departure.Add(60 * time.Minute)
+	departureFeira := arrivalFeira.Add(15 * time.Minute)
+	arrivalVitoria := departureFeira.Add(4 * time.Hour)
 	return protocol.CreateRideRequest{
 		DepartureAt: departure,
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.FeiraDeSantana, Destination: enum.Salvador, DepartureAt: departure, ArrivalAt: arrivalSalvador, PriceCents: 2500, AvailableSeats: 3},
-			{Origin: enum.Salvador, Destination: enum.LauroDeFreitas, DepartureAt: arrivalSalvador, ArrivalAt: arrivalLauro, PriceCents: 1200, AvailableSeats: 3},
+			{Origin: enum.Alagoinhas, Destination: enum.FeiraDeSantana, DepartureAt: departure, ArrivalAt: arrivalFeira, PriceCents: 2000, AvailableSeats: 3},
+			{Origin: enum.FeiraDeSantana, Destination: enum.VitoriaDaConquista, DepartureAt: departureFeira, ArrivalAt: arrivalVitoria, PriceCents: 6500, AvailableSeats: 3},
 		},
 	}
 }
 
 func brunoRide(date time.Time) protocol.CreateRideRequest {
-	departure := time.Date(date.Year(), date.Month(), date.Day(), 8, 30, 0, 0, time.Local)
-	arrivalSalvador := departure.Add(75 * time.Minute)
-	arrivalLauro := arrivalSalvador.Add(45 * time.Minute)
+	departure := time.Date(date.Year(), date.Month(), date.Day(), 6, 0, 0, 0, time.Local)
+	arrivalFeira := departure.Add(2*time.Hour + 30*time.Minute)
+	departureFeira := arrivalFeira.Add(15 * time.Minute)
+	arrivalLauro := departureFeira.Add(90 * time.Minute)
 	return protocol.CreateRideRequest{
 		DepartureAt: departure,
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.Alagoinhas, Destination: enum.Salvador, DepartureAt: departure, ArrivalAt: arrivalSalvador, PriceCents: 3000, AvailableSeats: 3},
-			{Origin: enum.Salvador, Destination: enum.LauroDeFreitas, DepartureAt: arrivalSalvador, ArrivalAt: arrivalLauro, PriceCents: 1500, AvailableSeats: 3},
+			{Origin: enum.Jequie, Destination: enum.FeiraDeSantana, DepartureAt: departure, ArrivalAt: arrivalFeira, PriceCents: 4500, AvailableSeats: 3},
+			{Origin: enum.FeiraDeSantana, Destination: enum.LauroDeFreitas, DepartureAt: departureFeira, ArrivalAt: arrivalLauro, PriceCents: 3000, AvailableSeats: 3},
 		},
 	}
 }

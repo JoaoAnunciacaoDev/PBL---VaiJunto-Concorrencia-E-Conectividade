@@ -1,10 +1,8 @@
 # VaiJunto — Caronas Compartilhadas
 
-Aplicação de caronas compartilhadas construída em Go para a disciplina de Concorrência e Conectividade. Há um servidor central TCP e clientes de terminal. A comunicação usa mensagens JSON, uma por linha, sobre uma conexão TCP persistente.
+Aplicação de caronas compartilhadas construída em Go para a disciplina de Concorrência e Conectividade. Há um servidor central TCP e clientes de terminal. A comunicação usa mensagens JSON sobre uma conexão TCP.
 
 O sistema permite que motoristas publiquem caronas com vários trechos e que passageiros encontrem itinerários, reservem seus trechos e cancelem reservas. O repositório protege as reservas concorrentes para que um assento não seja vendido duas vezes.
-
-O [diagrama de arquitetura](diagrams/ArchitectureDiagram.md) mostra o fluxo entre clientes, conexões TCP, sessões, handlers, repositório concorrente e persistência atômica. O [roteiro de apresentação](PRESENTATION.md) organiza uma demonstração completa em 20 minutos.
 
 ## Pré-requisitos
 
@@ -54,49 +52,34 @@ go run ./cmd/api-client -addr 192.168.1.50:8080
 
 Se o servidor estiver desligado, o cliente oferece as opções de tentar conectar novamente ou sair.
 
-Você pode abrir vários clientes ao mesmo tempo. Isso é útil para testar uma disputa por assentos com diferentes passageiros.
-
 ## Execução com Docker
 
-Crie a imagem e inicie o servidor:
+Crie a imagem e inicie o servidor. No PowerShell, defina uma vez o nome do projeto Compose e reutilize-o em todos os comandos do servidor:
 
-```bash
-docker compose -f docker/docker-compose.yaml build server
-docker compose -f docker/docker-compose.yaml up -d --wait server
+```powershell
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml build server
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml up -d --wait server
 ```
 
 O servidor publica a porta TCP `8080` e mantém dados e logs no volume nomeado `vaijunto-storage`. Para criar os dados de demonstração e abrir clientes interativos na mesma máquina:
 
-```bash
-docker compose -f docker/docker-compose.yaml run --rm seed
-docker compose -f docker/docker-compose.yaml run --rm client
-```
-
-O mesmo cliente atende os perfis motorista e passageiro. Abra outros terminais e repita o último comando para usar vários clientes simultaneamente.
-
-O cliente não possui dependência obrigatória do serviço `server`. Na mesma máquina, `server:8080` é usado como padrão e resolvido pelo DNS interno do Docker. Em outro computador, o endereço pode ser informado pela variável `VAIJUNTO_SERVER_ADDR` sem iniciar um servidor local.
-
-### Porta exclusiva no computador servidor
-
-A porta interna do contêiner é sempre `8080`, mas a porta publicada no computador pode ser escolhida com `VAIJUNTO_HOST_PORT`. No PowerShell:
-
 ```powershell
-$env:VAIJUNTO_HOST_PORT="18042"
-docker compose -p vaijunto-joao -f docker/docker-compose.yaml up -d --build --wait server
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml run --rm seed
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml run --rm client
 ```
 
-O nome informado em `-p` também torna exclusivos os nomes de rede, contêiner e volume desse projeto. Outros projetos podem usar suas próprias portas e nomes no mesmo computador.
+Abra outros terminais e repita o último comando para usar vários clientes simultaneamente.
+
+O cliente não possui dependência obrigatória do serviço `server`. Quando cliente e servidor são executados com o mesmo nome de projeto Compose, ambos entram na mesma rede Docker e `server:8080` é resolvido automaticamente pelo DNS interno. Nesse caso, não é necessário definir `VAIJUNTO_SERVER_ADDR`. Quando o cliente está em outro computador ou fora da rede Compose do servidor, informe um endereço alcançável, como `IP_DO_SERVIDOR:8080`, pela variável `VAIJUNTO_SERVER_ADDR`; isso não inicia um servidor local.
 
 ### Contêineres em computadores distintos
 
-No computador do servidor, escolha uma porta, inicie somente o serviço `server` e descubra o endereço IPv4 da máquina na rede local:
+No computador do servidor, mantenha a porta padrão 8080, inicie somente o serviço `server` e descubra o endereço IPv4 da máquina na rede local:
 
 ```powershell
-$env:VAIJUNTO_HOST_PORT="18042"
 docker compose -p vaijunto-joao -f docker/docker-compose.yaml up -d --build --wait server
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml run --rm seed
 ```
-
-Garanta que conexões TCP de entrada para a porta escolhida estejam liberadas no firewall.
 
 No computador cliente, construa a imagem sem iniciar o servidor:
 
@@ -108,27 +91,42 @@ Em seguida, informe o IP e a porta publicados pelo computador servidor e execute
 
 
 ```powershell
-$env:VAIJUNTO_SERVER_ADDR="192.168.1.50:18042"
+$env:VAIJUNTO_SERVER_ADDR="192.168.1.50:8080"
 docker compose -p vaijunto-cliente -f docker/docker-compose.yaml run --rm client
 ```
 
-O serviço `client` não possui `depends_on`; portanto, esse comando não cria um servidor no computador cliente. Como alternativa, a mesma imagem pode ser executada sem Compose:
 
 ```bash
-docker run --rm -it vaijunto:local /app/bin/api-client -addr 192.168.1.50:18042
+docker run --rm -it vaijunto:local /app/bin/api-client -addr 192.168.1.50:8080
 ```
 
-Substitua `192.168.1.50` e `18042` pelo IP e pela porta reais do computador servidor. Não use `localhost`: dentro do contêiner ele aponta para o próprio contêiner cliente.
+Substitua `192.168.1.50` pelo IP real do computador servidor.
 
-Para encerrar o servidor sem apagar os dados:
+### Encerrar os contêineres
 
-```bash
-docker compose -f docker/docker-compose.yaml down
+Para encerrar e remover os contêineres e a rede do projeto sem apagar os dados:
+
+```powershell
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml down
+```
+
+O volume que contém `state.json` e os logs permanece disponível para a próxima execução.
+
+Para apenas parar os contêineres, mantendo-os criados:
+
+```powershell
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml stop
+```
+
+Para encerrar o projeto e também apagar definitivamente o volume persistido:
+
+```powershell
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml down -v
 ```
 
 ### Dados de teste
 
-Com o servidor em execução, o comando abaixo cria duas contas de motorista, duas contas de passageiro, veículos e duas caronas que se conectam em Salvador:
+Com o servidor em execução, o comando abaixo cria duas contas de motorista, duas contas de passageiro, veículos e duas caronas com dois trechos cada:
 
 ```bash
 go run ./cmd/seed
@@ -140,7 +138,14 @@ Por padrão, as caronas são criadas para o dia seguinte. O comando informa a da
 go run ./cmd/seed -date 20/09/2026
 ```
 
-Contas: `ana@gmail.com`, `bruno@gmail.com`, `alice@gmail.com` e `beto@gmail.com`. A senha de todas é `1234568Abc#`. O comando pode ser executado novamente: contas e veículos existentes são mantidos, e não publica nova carona para um motorista que já possua caronas.
+As rotas criadas são:
+
+- Ana: `Alagoinhas → Feira de Santana → Vitória da Conquista`, com partida às 07:00;
+- Bruno: `Jequié → Feira de Santana → Lauro de Freitas`, com partida às 06:00.
+
+Ana chega a Feira de Santana às 08:00 e o segundo trecho de Bruno sai de Feira às 08:45. Assim, uma busca de `Alagoinhas` para `Lauro de Freitas` demonstra um itinerário combinado: o passageiro viaja até Feira com Ana e continua com Bruno.
+
+Contas: `ana@gmail.com`, `bruno@gmail.com`, `alice@gmail.com` e `beto@gmail.com`. A senha de todas é `12345678Abc#`. O comando pode ser executado novamente: contas, veículos e rotas idênticas são mantidos, enquanto uma rota de demonstração ainda ausente é criada mesmo que o motorista já possua outra carona.
 
 ## Roteiro de uso
 
@@ -163,6 +168,8 @@ O número de assentos de um trecho não pode ultrapassar a capacidade do veícul
 2. Entre em `Opções de passageiro` → `1 - Buscar itinerários`.
 3. Escolha origem, destino e a data da viagem no formato `dd/mm/aaaa`.
 4. Escolha o número de um itinerário exibido e confirme com `s`.
+
+Com os dados do seed, escolha `Alagoinhas` como origem e `Lauro de Freitas` como destino. O resultado utiliza um trecho da carona de Ana e outro da carona de Bruno, com conexão em Feira de Santana.
 
 Uma reserva pode ter mais de um trecho. O servidor só confirma a reserva se todos os trechos ainda tiverem assento; ele nunca confirma apenas parte do itinerário. O trecho seguinte deve sair no mesmo instante ou depois da chegada do anterior.
 
