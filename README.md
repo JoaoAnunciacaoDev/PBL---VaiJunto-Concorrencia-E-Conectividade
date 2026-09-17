@@ -77,8 +77,9 @@ O cliente não possui dependência obrigatória do serviço `server`. Quando cli
 No computador do servidor, mantenha a porta padrão 8080, inicie somente o serviço `server` e descubra o endereço IPv4 da máquina na rede local:
 
 ```powershell
-docker compose -p vaijunto-joao -f docker/docker-compose.yaml up -d --build --wait server
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml up -d --build server
 docker compose -p vaijunto-joao -f docker/docker-compose.yaml run --rm seed
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml logs server
 ```
 
 No computador cliente, construa a imagem sem iniciar o servidor:
