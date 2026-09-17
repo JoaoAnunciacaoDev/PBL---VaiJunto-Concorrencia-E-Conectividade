@@ -79,7 +79,7 @@ No computador do servidor, mantenha a porta padrão 8080, inicie somente o servi
 ```powershell
 docker compose -p vaijunto-joao -f docker/docker-compose.yaml up -d --build server
 docker compose -p vaijunto-joao -f docker/docker-compose.yaml run --rm seed
-docker compose -p vaijunto-joao -f docker/docker-compose.yaml logs server
+docker compose -p vaijunto-joao -f docker/docker-compose.yaml logs server -f
 ```
 
 No computador cliente, construa a imagem sem iniciar o servidor:
