@@ -4,6 +4,36 @@ Aplicação de caronas compartilhadas construída em Go para a disciplina de Con
 
 O sistema permite que motoristas publiquem caronas com vários trechos e que passageiros encontrem itinerários, reservem seus trechos e cancelem reservas. O repositório protege as reservas concorrentes para que um assento não seja vendido duas vezes.
 
+## Estrutura do projeto
+
+```text
+.
+├── cmd/
+│   ├── api-client/          # Ponto de entrada do cliente de terminal
+│   ├── api-server/          # Ponto de entrada do servidor TCP
+│   └── seed/                # Criação dos dados de demonstração
+├── data/                    # Estado persistido em execução (não versionado)
+├── diagrams/                # Diagramas de arquitetura e de classes
+├── docker/
+│   ├── Dockerfile           # Construção das imagens da aplicação
+│   └── docker-compose.yaml  # Serviços de servidor, cliente e seed
+├── internal/
+│   ├── client/              # Comunicação TCP, entrada e menus do cliente
+│   ├── enum/                # Enumerações usadas pelo domínio e pelos menus
+│   ├── models/              # Entidades e regras do domínio
+│   ├── protocol/            # Ações, DTOs e mensagens JSON do protocolo
+│   ├── server/              # Servidor, handlers, sessões e persistência
+│   └── utils/               # Utilitários de terminal e arquivos
+├── logs/                    # Logs criados pelo servidor (não versionados)
+├── go.mod                   # Definição do módulo e versão do Go
+├── go.sum                   # Checksums das dependências
+├── PRESENTATION.md          # Material de apoio para a apresentação
+├── PROTOCOL.md              # Referência completa do protocolo TCP/JSON
+└── README.md                # Documentação principal do projeto
+```
+
+Os testes ficam junto aos pacotes e usam o sufixo `_test.go`. As pastas `data/` e `logs/` são criadas ou preenchidas durante a execução e estão incluídas no `.gitignore`.
+
 ## Pré-requisitos
 
 - Go 1.27 ou compatível com o projeto
