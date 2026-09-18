@@ -134,6 +134,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 }
 
+// sendResponse envia uma resposta JSON para o cliente conectado.
 func (s *Server) sendResponse(conn net.Conn, encoder *json.Encoder, response protocol.Response) error {
 	if err := conn.SetWriteDeadline(time.Now().Add(s.writeTimeout)); err != nil {
 		return err
@@ -142,6 +143,7 @@ func (s *Server) sendResponse(conn net.Conn, encoder *json.Encoder, response pro
 	return protocol.SendJson(encoder, response)
 }
 
+// processRequest processa a solicitação recebida do cliente com base na ação especificada.
 func (s *Server) processRequest(request protocol.Request, session *Session) protocol.Response {
 	switch request.Action {
 	case protocol.ActionRegisterUser:

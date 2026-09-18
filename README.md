@@ -228,7 +228,7 @@ Toda requisição possui a estrutura:
 
 ```json
 {
-  "action": "login",
+  "action": protocol.ActionLogin,
   "payload": {
     "email": "ana@example.com",
     "password": "Senha@123"

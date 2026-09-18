@@ -139,17 +139,23 @@ Valores monetários são sempre inteiros em centavos: `2500` representa R$ 25,00
 ```json
 {
   "id": "<reservation_uuid>",
-  "passenger_id": "<passenger_uuid>",
   "status": 3,
+  "created_at": "2026-09-10T15:04:05Z",
   "segments": [
     {
       "ride_id": "<ride_uuid>",
-      "segment_id": "<segment_uuid>"
+      "segment_id": "<segment_uuid>",
+      "origin": 2,
+      "destination": 1,
+      "departure_at": "2026-09-17T07:00:00-03:00",
+      "arrival_at": "2026-09-17T08:00:00-03:00",
+      "price_cents": 2000
     }
-  ],
-  "created_at": "2026-09-10T15:04:05Z"
+  ]
 }
 ```
+
+A resposta expande cada trecho com os dados necessários para exibição ao passageiro. O identificador do passageiro não é retornado porque as ações de consulta entregam somente as reservas da sessão autenticada.
 
 ## Ações públicas
 
