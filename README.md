@@ -203,7 +203,7 @@ data/
 └── state.json
 ```
 
-`state.json` possui versão de formato e reúne usuários, motoristas, caronas e reservas. Cada alteração é serializada em um arquivo temporário, sincronizada com `Sync`, fechada e promovida com um único rename atômico. Assim, a confirmação de uma reserva e a redução dos assentos nunca ficam separadas em arquivos diferentes.
+`state.json` possui versão de formato e reúne usuários, motoristas, caronas e reservas. Cada alteração é serializada em um arquivo temporário, sincronizada com `Sync`, fechada e promovida com um único rename atômico.
 
 Na primeira execução após uma versão antiga do projeto, se `state.json` ainda não existir, o servidor lê `users.json`, `drivers.json`, `rides.json` e `reservations.json` e cria automaticamente o estado unificado. Depois da migração, `state.json` passa a ser a fonte de verdade.
 
@@ -229,7 +229,7 @@ Toda requisição possui a estrutura:
 
 ```json
 {
-  "action": protocol.ActionLogin,
+  "action": "login",
   "payload": {
     "email": "ana@example.com",
     "password": "Senha@123"
