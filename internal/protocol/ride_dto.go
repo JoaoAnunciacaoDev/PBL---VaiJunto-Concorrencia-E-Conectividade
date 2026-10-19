@@ -62,6 +62,7 @@ type ItineraryResponse struct {
 type ItinerarySegmentResponse struct {
 	RideID         uuid.UUID `json:"ride_id"`
 	SegmentID      uuid.UUID `json:"segment_id"`
+	CompanyID      string    `json:"company_id"`
 	Origin         enum.City `json:"origin"`
 	Destination    enum.City `json:"destination"`
 	DepartureAt    time.Time `json:"departure_at"`

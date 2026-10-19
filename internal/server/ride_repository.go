@@ -183,3 +183,54 @@ func sameCalendarDate(first, second time.Time) bool {
 	secondYear, secondMonth, secondDay := second.Date()
 	return firstYear == secondYear && firstMonth == secondMonth && firstDay == secondDay
 }
+
+// DecrementSeat decrementa em 1 os assentos disponíveis de um trecho específico e persiste o estado.
+func (r *Repository) DecrementSeat(rideID, segmentID uuid.UUID) error {
+	r.ridesMu.Lock()
+	defer r.ridesMu.Unlock()
+
+	ride, exists := r.rides[rideID]
+	if !exists || ride.Cancelled {
+		return errors.New("carona indisponível")
+	}
+
+	for i := range ride.Segments {
+		if ride.Segments[i].ID == segmentID {
+			if ride.Segments[i].AvailableSeats <= 0 {
+				return errors.New("não há assentos disponíveis no trecho")
+			}
+			ride.Segments[i].AvailableSeats--
+			if err := r.saveStateLocked(); err != nil {
+				ride.Segments[i].AvailableSeats++
+				return fmt.Errorf("salvar estado após decrementar assento: %w", err)
+			}
+			return nil
+		}
+	}
+
+	return errors.New("trecho não encontrado")
+}
+
+// IncrementSeat incrementa em 1 os assentos disponíveis de um trecho específico e persiste o estado.
+func (r *Repository) IncrementSeat(rideID, segmentID uuid.UUID) error {
+	r.ridesMu.Lock()
+	defer r.ridesMu.Unlock()
+
+	ride, exists := r.rides[rideID]
+	if !exists || ride.Cancelled {
+		return errors.New("carona indisponível")
+	}
+
+	for i := range ride.Segments {
+		if ride.Segments[i].ID == segmentID {
+			ride.Segments[i].AvailableSeats++
+			if err := r.saveStateLocked(); err != nil {
+				ride.Segments[i].AvailableSeats--
+				return fmt.Errorf("salvar estado após incrementar assento: %w", err)
+			}
+			return nil
+		}
+	}
+
+	return errors.New("trecho não encontrado")
+}

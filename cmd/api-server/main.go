@@ -7,12 +7,16 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/consortium"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/server"
 )
 
 func main() {
 	dataDirectoryFlag := flag.String("data-dir", "", "diretório onde os arquivos JSON serão armazenados")
 	companyIDFlag := flag.String("company-id", "empresa-a", "identificador único da empresa no consórcio")
+	tcpAddrFlag := flag.String("tcp-addr", ":8080", "endereço para escuta TCP dos clientes")
+	httpAddrFlag := flag.String("http-addr", ":8081", "endereço para API REST inter-servidores")
+	peersFlag := flag.String("peers", "", "lista de servidores parceiros (ex: empresa-b=http://b:8081,empresa-c=http://c:8081)")
 	flag.Parse()
 
 	dataDirectory, err := resolveDataDirectory(*dataDirectoryFlag)
@@ -25,15 +29,27 @@ func main() {
 	}
 	defer logFile.Close()
 
-	srv, err := server.NewServer(":8080", filepath.Join(dataDirectory, "users.json"), *companyIDFlag)
+	peers, err := consortium.ParsePeers(*peersFlag)
+	if err != nil {
+		log.Fatalf("Erro ao configurar servidores parceiros: %v", err)
+	}
+
+	srv, err := server.NewServerWithConfig(server.ServerConfig{
+		CompanyID: *companyIDFlag,
+		TCPAddr:   *tcpAddrFlag,
+		HTTPAddr:  *httpAddrFlag,
+		UsersPath: filepath.Join(dataDirectory, "users.json"),
+		Peers:     peers,
+	})
 
 	if err != nil {
 		log.Fatalf("Erro ao iniciar servidor: %v", err)
 	}
-	log.Printf("Empresa: %s | Dados persistidos em %s", *companyIDFlag, dataDirectory)
+	log.Printf("Empresa: %s | TCP: %s | HTTP: %s | Peers: %d | Dados em: %s",
+		*companyIDFlag, *tcpAddrFlag, *httpAddrFlag, len(peers), dataDirectory)
 
 	if err := srv.Start(); err != nil {
-		log.Fatalf("Erro ao iniciar servidor: %v", err)
+		log.Fatalf("Erro ao executar servidor: %v", err)
 	}
 }
 

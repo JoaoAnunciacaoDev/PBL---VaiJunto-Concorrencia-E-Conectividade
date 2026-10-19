@@ -30,8 +30,8 @@ COPY --from=builder --chown=vaijunto:vaijunto /app/bin/ /app/bin/
 
 USER vaijunto
 
-# Expõe a porta TCP do servidor central
-EXPOSE 8080
+# Expõe a porta TCP do cliente (8080) e a porta REST HTTP inter-empresa (8081)
+EXPOSE 8080 8081
 VOLUME ["/app/storage"]
 
 # Por padrão, roda o servidor central

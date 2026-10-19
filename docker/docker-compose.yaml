@@ -1,38 +1,94 @@
 services:
-  server:
+  empresa-a:
     image: vaijunto:local
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    command: ["/app/bin/api-server", "-data-dir", "/app/storage/data"]
+    command: [
+      "/app/bin/api-server",
+      "-data-dir", "/app/storage/data",
+      "-company-id", "empresa-a",
+      "-tcp-addr", ":8080",
+      "-http-addr", ":8081",
+      "-peers", "empresa-b=http://empresa-b:8081,empresa-c=http://empresa-c:8081"
+    ]
     ports:
-      - "${VAIJUNTO_HOST_PORT:-8080}:8080"
+      - "8080:8080"   # Clientes TCP da Empresa A
+      - "8081:8081"   # API REST inter-servidores Empresa A
     volumes:
-      - vaijunto-storage:/app/storage
+      - empresa-a-storage:/app/storage
     healthcheck:
-      # Confere o socket em escuta sem abrir conexões artificiais que
-      # apareceriam como sessões de clientes nos logs do servidor.
-      test: ["CMD-SHELL", "netstat -ltn | grep -q ':8080 '"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/internal/v1/health || exit 1"]
       interval: 2s
       timeout: 1s
       retries: 15
-      start_period: 2s
+      start_period: 3s
     restart: unless-stopped
 
-  # Um único cliente permite cadastrar e usar os perfis de motorista e
-  # passageiro. Execute com: docker compose run --rm client
+  empresa-b:
+    image: vaijunto:local
+    command: [
+      "/app/bin/api-server",
+      "-data-dir", "/app/storage/data",
+      "-company-id", "empresa-b",
+      "-tcp-addr", ":8080",
+      "-http-addr", ":8081",
+      "-peers", "empresa-a=http://empresa-a:8081,empresa-c=http://empresa-c:8081"
+    ]
+    ports:
+      - "8082:8080"   # Clientes TCP da Empresa B
+      - "8083:8081"   # API REST inter-servidores Empresa B
+    volumes:
+      - empresa-b-storage:/app/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/internal/v1/health || exit 1"]
+      interval: 2s
+      timeout: 1s
+      retries: 15
+      start_period: 3s
+    restart: unless-stopped
+
+  empresa-c:
+    image: vaijunto:local
+    command: [
+      "/app/bin/api-server",
+      "-data-dir", "/app/storage/data",
+      "-company-id", "empresa-c",
+      "-tcp-addr", ":8080",
+      "-http-addr", ":8081",
+      "-peers", "empresa-a=http://empresa-a:8081,empresa-b=http://empresa-b:8081"
+    ]
+    ports:
+      - "8084:8080"   # Clientes TCP da Empresa C
+      - "8085:8081"   # API REST inter-servidores Empresa C
+    volumes:
+      - empresa-c-storage:/app/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/internal/v1/health || exit 1"]
+      interval: 2s
+      timeout: 1s
+      retries: 15
+      start_period: 3s
+    restart: unless-stopped
+
+  # Cliente de terminal para testes manuais interativos
+  # Exemplo de uso: docker compose run --rm client
+  # Para conectar na empresa B: VAIJUNTO_SERVER_ADDR=empresa-b:8080 docker compose run --rm client
   client:
     image: vaijunto:local
-    command: ["/app/bin/api-client", "-addr=${VAIJUNTO_SERVER_ADDR:-server:8080}"]
+    command: ["/app/bin/api-client", "-addr=${VAIJUNTO_SERVER_ADDR:-empresa-a:8080}"]
     stdin_open: true
     tty: true
 
+  # Carga inicial de dados de demonstração
   seed:
     image: vaijunto:local
-    command: ["/app/bin/seed", "-addr=server:8080"]
+    command: ["/app/bin/seed", "-addr=empresa-a:8080"]
     depends_on:
-      server:
+      empresa-a:
         condition: service_healthy
 
 volumes:
-  vaijunto-storage:
+  empresa-a-storage:
+  empresa-b-storage:
+  empresa-c-storage:

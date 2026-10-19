@@ -161,7 +161,11 @@ func confirmItinerary(tcpClient *TCPClient, input *bufio.Reader, output io.Write
 
 	segments := make([]models.ReservedSegment, 0, len(itinerary.Segments))
 	for _, segment := range itinerary.Segments {
-		segments = append(segments, models.ReservedSegment{RideID: segment.RideID, SegmentID: segment.SegmentID})
+		segments = append(segments, models.ReservedSegment{
+			RideID:    segment.RideID,
+			SegmentID: segment.SegmentID,
+			CompanyID: segment.CompanyID,
+		})
 	}
 
 	payload, err := json.Marshal(protocol.ConfirmReservationRequest{Segments: segments})
