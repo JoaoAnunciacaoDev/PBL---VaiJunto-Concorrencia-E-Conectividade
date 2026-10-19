@@ -358,7 +358,7 @@ func newTestServer(t *testing.T) *Server {
 func newTestServerAtPath(t *testing.T, usersPath string) *Server {
 	t.Helper()
 
-	server, err := NewServer("", usersPath)
+	server, err := NewServer("", usersPath, "empresa-a")
 	if err != nil {
 		t.Fatalf("criar servidor de teste: %v", err)
 	}

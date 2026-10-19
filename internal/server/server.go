@@ -19,6 +19,7 @@ const (
 )
 
 type Server struct {
+	companyID  string
 	addr       string
 	repository *Repository
 
@@ -27,10 +28,14 @@ type Server struct {
 	maxRequestSize  int
 }
 
-// NewServer cria uma nova instância do servidor com o endereço e o caminho para o arquivo de usuários fornecidos.
-// Ele inicializa o repositório de usuários
+// NewServer cria uma nova instância do servidor com o endereço, o caminho para o arquivo de usuários
+// e o identificador da empresa fornecidos.
 // Retorna um ponteiro para a instância do servidor e possíveis erros.
-func NewServer(addr, usersPath string) (*Server, error) {
+func NewServer(addr, usersPath, companyID string) (*Server, error) {
+	if companyID == "" {
+		companyID = "empresa-a"
+	}
+
 	repository, err := NewRepository(usersPath)
 
 	if err != nil {
@@ -38,6 +43,7 @@ func NewServer(addr, usersPath string) (*Server, error) {
 	}
 
 	return &Server{
+		companyID:       companyID,
 		addr:            addr,
 		repository:      repository,
 		readIdleTimeout: defaultReadIdleTimeout,

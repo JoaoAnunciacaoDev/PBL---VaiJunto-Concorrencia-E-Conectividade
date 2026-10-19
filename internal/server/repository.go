@@ -11,12 +11,17 @@ import (
 )
 
 type Repository struct {
-	mu sync.RWMutex
+	usersMu  sync.RWMutex
+	users    map[string]*models.User
 
-	users        map[string]*models.User
-	drivers      map[uuid.UUID]*models.Driver
-	rides        map[uuid.UUID]*models.Ride
-	reservations map[uuid.UUID]*models.Reservation
+	driversMu sync.RWMutex
+	drivers   map[uuid.UUID]*models.Driver
+
+	ridesMu sync.RWMutex
+	rides   map[uuid.UUID]*models.Ride
+
+	reservationsMu sync.RWMutex
+	reservations   map[uuid.UUID]*models.Reservation
 
 	statePath        string
 	usersPath        string
@@ -24,8 +29,6 @@ type Repository struct {
 	ridesPath        string
 	reservationsPath string
 
-	// beforeStateRename permite que os testes simulem uma interrupção depois
-	// que o novo estado foi sincronizado, mas antes de substituir state.json.
 	beforeStateRename func() error
 }
 

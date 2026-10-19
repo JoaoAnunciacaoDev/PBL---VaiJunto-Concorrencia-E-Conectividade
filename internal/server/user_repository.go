@@ -50,8 +50,8 @@ func (r *Repository) SaveUser(user *models.User) error {
 		return errors.New("usuário inválido")
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.usersMu.Lock()
+	defer r.usersMu.Unlock()
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(user.Email))
 	user.Email = normalizedEmail
@@ -70,8 +70,8 @@ func (r *Repository) SaveUser(user *models.User) error {
 }
 
 func (r *Repository) GetUserByEmail(email string) (*models.User, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.usersMu.RLock()
+	defer r.usersMu.RUnlock()
 
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 	user, exists := r.users[normalizedEmail]
@@ -83,8 +83,8 @@ func (r *Repository) GetUserByEmail(email string) (*models.User, error) {
 }
 
 func (r *Repository) GetUserByID(id uuid.UUID) (*models.User, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.usersMu.RLock()
+	defer r.usersMu.RUnlock()
 
 	user, exists := r.userByIDLocked(id)
 	if !exists {

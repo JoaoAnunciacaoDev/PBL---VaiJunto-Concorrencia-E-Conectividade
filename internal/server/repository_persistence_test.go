@@ -112,8 +112,8 @@ func TestRepositoryKeepsPreviousStateWhenRenameIsInterrupted(t *testing.T) {
 	repository.beforeStateRename = func() error { return errors.New("falha simulada antes do rename") }
 
 	_, err = repository.ConfirmReservation(passenger.ID, []models.ReservedSegment{
-		{RideID: ride.ID, SegmentID: ride.Segments[0].ID},
-		{RideID: ride.ID, SegmentID: ride.Segments[1].ID},
+		{RideID: ride.ID, SegmentID: ride.Segments[0].ID, CompanyID: "empresa-a"},
+		{RideID: ride.ID, SegmentID: ride.Segments[1].ID, CompanyID: "empresa-a"},
 	})
 	if err == nil {
 		t.Fatal("reserva deveria falhar antes do rename")

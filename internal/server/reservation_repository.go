@@ -37,8 +37,14 @@ func (r *Repository) ConfirmReservation(passengerID uuid.UUID, segments []models
 		return nil, errors.New("reserva inválida")
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.ridesMu.Lock()
+	defer r.ridesMu.Unlock()
+
+	r.reservationsMu.Lock()
+	defer r.reservationsMu.Unlock()
+
+	r.usersMu.RLock()
+	defer r.usersMu.RUnlock()
 
 	if _, exists := r.userByIDLocked(passengerID); !exists {
 		return nil, errors.New("usuário inválido")
@@ -81,8 +87,8 @@ func (r *Repository) ConfirmReservation(passengerID uuid.UUID, segments []models
 }
 
 func (r *Repository) GetReservationsByPassengerID(passengerID uuid.UUID) ([]*models.Reservation, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.reservationsMu.RLock()
+	defer r.reservationsMu.RUnlock()
 
 	reservations := make([]*models.Reservation, 0)
 	for _, reservation := range r.reservations {
@@ -100,8 +106,11 @@ func (r *Repository) GetReservationsByPassengerID(passengerID uuid.UUID) ([]*mod
 // GetConfirmedPassengerIDsByRideID returns each passenger only once per
 // segment. Canceled reservations are deliberately excluded.
 func (r *Repository) GetConfirmedPassengerIDsByRideID(rideID uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.ridesMu.RLock()
+	defer r.ridesMu.RUnlock()
+
+	r.reservationsMu.RLock()
+	defer r.reservationsMu.RUnlock()
 
 	if _, exists := r.rides[rideID]; !exists {
 		return nil, errors.New("carona não encontrada")
@@ -141,8 +150,11 @@ func (r *Repository) GetConfirmedPassengerIDsByRideID(rideID uuid.UUID) (map[uui
 }
 
 func (r *Repository) CancelReservation(reservationID, passengerID uuid.UUID) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.ridesMu.Lock()
+	defer r.ridesMu.Unlock()
+
+	r.reservationsMu.Lock()
+	defer r.reservationsMu.Unlock()
 
 	reservation, exists := r.reservations[reservationID]
 	if !exists {

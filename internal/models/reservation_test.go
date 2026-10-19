@@ -15,8 +15,8 @@ func TestReservationIsValid(t *testing.T) {
 		Status:      enum.Pendente,
 		CreatedAt:   time.Now(),
 		Segments: []ReservedSegment{
-			{RideID: uuid.New(), SegmentID: uuid.New()},
-			{RideID: uuid.New(), SegmentID: uuid.New()},
+			{RideID: uuid.New(), SegmentID: uuid.New(), CompanyID: "empresa-a"},
+			{RideID: uuid.New(), SegmentID: uuid.New(), CompanyID: "empresa-a"},
 		},
 	}
 
@@ -26,7 +26,7 @@ func TestReservationIsValid(t *testing.T) {
 }
 
 func TestReservationRejectsDuplicatedSegment(t *testing.T) {
-	segment := ReservedSegment{RideID: uuid.New(), SegmentID: uuid.New()}
+	segment := ReservedSegment{RideID: uuid.New(), SegmentID: uuid.New(), CompanyID: "empresa-a"}
 	reservation := Reservation{
 		ID:          uuid.New(),
 		PassengerID: uuid.New(),

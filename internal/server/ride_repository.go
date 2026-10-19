@@ -37,8 +37,8 @@ func (r *Repository) SaveRide(ride *models.Ride) error {
 		return errors.New("carona inválida")
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.ridesMu.Lock()
+	defer r.ridesMu.Unlock()
 
 	oldRide, existed := r.rides[ride.ID]
 	r.rides[ride.ID] = cloneRide(ride)
@@ -61,8 +61,11 @@ func (r *Repository) SaveRideForDriver(ride *models.Ride) error {
 		return errors.New("carona inválida")
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.driversMu.RLock()
+	defer r.driversMu.RUnlock()
+
+	r.ridesMu.Lock()
+	defer r.ridesMu.Unlock()
 
 	driver, exists := r.drivers[ride.DriverID]
 	if !exists || driver.Vehicle == nil {
@@ -89,8 +92,8 @@ func (r *Repository) SaveRideForDriver(ride *models.Ride) error {
 }
 
 func (r *Repository) GetRideByID(id uuid.UUID) (*models.Ride, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.ridesMu.RLock()
+	defer r.ridesMu.RUnlock()
 
 	ride, exists := r.rides[id]
 	if !exists {
@@ -101,8 +104,8 @@ func (r *Repository) GetRideByID(id uuid.UUID) (*models.Ride, error) {
 }
 
 func (r *Repository) GetRidesByDriverID(driverID uuid.UUID) ([]*models.Ride, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.ridesMu.RLock()
+	defer r.ridesMu.RUnlock()
 
 	rides := make([]*models.Ride, 0)
 	for _, ride := range r.rides {
@@ -119,8 +122,8 @@ func (r *Repository) GetRidesByDriverID(driverID uuid.UUID) ([]*models.Ride, err
 }
 
 func (r *Repository) GetActiveRidesByDate(date time.Time) ([]*models.Ride, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.ridesMu.RLock()
+	defer r.ridesMu.RUnlock()
 
 	rides := make([]*models.Ride, 0)
 	for _, ride := range r.rides {
@@ -137,8 +140,11 @@ func (r *Repository) GetActiveRidesByDate(date time.Time) ([]*models.Ride, error
 }
 
 func (r *Repository) CancelRide(rideID, driverID uuid.UUID) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.ridesMu.Lock()
+	defer r.ridesMu.Unlock()
+
+	r.reservationsMu.Lock()
+	defer r.reservationsMu.Unlock()
 
 	ride, exists := r.rides[rideID]
 	if !exists {

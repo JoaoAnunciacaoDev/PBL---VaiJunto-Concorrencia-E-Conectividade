@@ -108,7 +108,7 @@ func TestTCPConcurrentClientsReserveLastSeat(t *testing.T) {
 			<-startReservation
 
 			reservationPayload, _ := json.Marshal(protocol.ConfirmReservationRequest{
-				Segments: []models.ReservedSegment{{RideID: ride.ID, SegmentID: ride.Segments[0].ID}},
+				Segments: []models.ReservedSegment{{RideID: ride.ID, SegmentID: ride.Segments[0].ID, CompanyID: "empresa-a"}},
 			})
 			startedAt := time.Now()
 			response, err := sendTCPTestRequest(encoder, decoder, protocol.Request{Action: "confirm_reservation", Payload: reservationPayload})
@@ -215,8 +215,8 @@ func TestTCPReservationIsAtomicAcrossMultipleSegments(t *testing.T) {
 	}
 
 	reservationPayload, _ := json.Marshal(protocol.ConfirmReservationRequest{Segments: []models.ReservedSegment{
-		{RideID: ride.ID, SegmentID: ride.Segments[0].ID},
-		{RideID: ride.ID, SegmentID: ride.Segments[1].ID},
+		{RideID: ride.ID, SegmentID: ride.Segments[0].ID, CompanyID: "empresa-a"},
+		{RideID: ride.ID, SegmentID: ride.Segments[1].ID, CompanyID: "empresa-a"},
 	}})
 	response, err := sendTCPTestRequest(encoder, decoder, protocol.Request{
 		Action: protocol.ActionConfirmReservation, Payload: reservationPayload,
@@ -303,8 +303,8 @@ func measuredDuration(startedAt time.Time) time.Duration {
 }
 
 func reservationCount(repository *Repository) int {
-	repository.mu.RLock()
-	defer repository.mu.RUnlock()
+	repository.reservationsMu.RLock()
+	defer repository.reservationsMu.RUnlock()
 	return len(repository.reservations)
 }
 

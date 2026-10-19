@@ -49,8 +49,8 @@ func (r *Repository) SaveDriver(driver *models.Driver) error {
 		return errors.New("motorista inválido")
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.driversMu.Lock()
+	defer r.driversMu.Unlock()
 
 	oldDriver, existed := r.drivers[driver.ID]
 	r.drivers[driver.ID] = cloneDriver(driver)
@@ -67,8 +67,8 @@ func (r *Repository) SaveDriver(driver *models.Driver) error {
 }
 
 func (r *Repository) GetDriverByUserID(userID uuid.UUID) (*models.Driver, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.driversMu.RLock()
+	defer r.driversMu.RUnlock()
 
 	driver, exists := r.drivers[userID]
 	if !exists {
@@ -83,8 +83,14 @@ func (r *Repository) GetDriverByUserID(userID uuid.UUID) (*models.Driver, error)
 // validation and the persistence, so a new ride cannot be published between
 // those two steps.
 func (r *Repository) UpdateDriverVehicle(driverID uuid.UUID, vehicle models.Vehicle) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.driversMu.Lock()
+	defer r.driversMu.Unlock()
+
+	r.ridesMu.RLock()
+	defer r.ridesMu.RUnlock()
+
+	r.reservationsMu.RLock()
+	defer r.reservationsMu.RUnlock()
 
 	driver, exists := r.drivers[driverID]
 	if !exists || driver.Vehicle == nil {
@@ -109,8 +115,14 @@ func (r *Repository) UpdateDriverVehicle(driverID uuid.UUID, vehicle models.Vehi
 // RemoveDriverVehicle refuses to remove the vehicle while an active ride still
 // belongs to the driver.
 func (r *Repository) RemoveDriverVehicle(driverID uuid.UUID) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.driversMu.Lock()
+	defer r.driversMu.Unlock()
+
+	r.ridesMu.RLock()
+	defer r.ridesMu.RUnlock()
+
+	r.reservationsMu.RLock()
+	defer r.reservationsMu.RUnlock()
 
 	driver, exists := r.drivers[driverID]
 	if !exists || driver.Vehicle == nil {
@@ -132,13 +144,13 @@ func (r *Repository) RemoveDriverVehicle(driverID uuid.UUID) error {
 }
 
 func (r *Repository) requiredVehicleCapacityForActiveRidesLocked(driverID uuid.UUID) int {
-	occupiedSeats := make(map[models.ReservedSegment]int)
+	occupiedSeats := make(map[[2]uuid.UUID]int)
 	for _, reservation := range r.reservations {
 		if reservation.Status != enum.Confirmada {
 			continue
 		}
 		for _, segment := range reservation.Segments {
-			occupiedSeats[segment]++
+			occupiedSeats[[2]uuid.UUID{segment.RideID, segment.SegmentID}]++
 		}
 	}
 
@@ -148,9 +160,7 @@ func (r *Repository) requiredVehicleCapacityForActiveRidesLocked(driverID uuid.U
 			continue
 		}
 		for _, stage := range ride.Segments {
-			requiredCapacity = max(requiredCapacity, stage.AvailableSeats+occupiedSeats[models.ReservedSegment{
-				RideID: ride.ID, SegmentID: stage.ID,
-			}])
+			requiredCapacity = max(requiredCapacity, stage.AvailableSeats+occupiedSeats[[2]uuid.UUID{ride.ID, stage.ID}])
 		}
 	}
 

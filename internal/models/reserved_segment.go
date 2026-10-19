@@ -5,8 +5,9 @@ import "github.com/google/uuid"
 type ReservedSegment struct {
 	RideID    uuid.UUID `json:"ride_id"`
 	SegmentID uuid.UUID `json:"segment_id"`
+	CompanyID string    `json:"company_id"`
 }
 
 func (s ReservedSegment) IsValid() bool {
-	return s.RideID != uuid.Nil && s.SegmentID != uuid.Nil
+	return s.RideID != uuid.Nil && s.SegmentID != uuid.Nil && s.CompanyID != ""
 }

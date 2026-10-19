@@ -89,7 +89,7 @@ func TestDriverCanCreateListAndCancelRide(t *testing.T) {
 		t.Fatalf("login do segundo motorista deveria funcionar: %s", response.Message)
 	}
 	if response := sendRequestWithSession(t, server, passengerSession, "confirm_reservation", protocol.ConfirmReservationRequest{
-		Segments: []models.ReservedSegment{{RideID: createdRide.ID, SegmentID: createdRide.Segments[0].ID}},
+		Segments: []models.ReservedSegment{{RideID: createdRide.ID, SegmentID: createdRide.Segments[0].ID, CompanyID: "empresa-a"}},
 	}); response.Success != "success" {
 		t.Fatalf("reserva deveria funcionar: %s", response.Message)
 	}

@@ -32,7 +32,7 @@ func TestConcurrentReservationsDoNotSellSameSeatTwice(t *testing.T) {
 		t.Fatalf("salvar carona: %v", err)
 	}
 
-	segments := []models.ReservedSegment{{RideID: ride.ID, SegmentID: ride.Segments[0].ID}}
+	segments := []models.ReservedSegment{{RideID: ride.ID, SegmentID: ride.Segments[0].ID, CompanyID: "empresa-a"}}
 	start := make(chan struct{})
 	var waitGroup sync.WaitGroup
 	results := make(chan error, len(passengers))
@@ -83,8 +83,8 @@ func TestReservationDoesNotPartiallyReserveItinerary(t *testing.T) {
 	}
 
 	_, err = repository.ConfirmReservation(passenger.ID, []models.ReservedSegment{
-		{RideID: ride.ID, SegmentID: ride.Segments[0].ID},
-		{RideID: ride.ID, SegmentID: ride.Segments[1].ID},
+		{RideID: ride.ID, SegmentID: ride.Segments[0].ID, CompanyID: "empresa-a"},
+		{RideID: ride.ID, SegmentID: ride.Segments[1].ID, CompanyID: "empresa-a"},
 	})
 	if err == nil {
 		t.Fatal("reserva com trecho sem assento deveria falhar")
@@ -116,8 +116,8 @@ func TestCancelRideCancelsRelatedReservationsAndRestoresSeats(t *testing.T) {
 		t.Fatalf("salvar carona: %v", err)
 	}
 	reservation, err := repository.ConfirmReservation(passenger.ID, []models.ReservedSegment{
-		{RideID: ride.ID, SegmentID: ride.Segments[0].ID},
-		{RideID: ride.ID, SegmentID: ride.Segments[1].ID},
+		{RideID: ride.ID, SegmentID: ride.Segments[0].ID, CompanyID: "empresa-a"},
+		{RideID: ride.ID, SegmentID: ride.Segments[1].ID, CompanyID: "empresa-a"},
 	})
 	if err != nil {
 		t.Fatalf("confirmar reserva: %v", err)

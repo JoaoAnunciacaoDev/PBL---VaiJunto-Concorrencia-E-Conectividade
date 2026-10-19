@@ -12,6 +12,7 @@ import (
 
 func main() {
 	dataDirectoryFlag := flag.String("data-dir", "", "diretório onde os arquivos JSON serão armazenados")
+	companyIDFlag := flag.String("company-id", "empresa-a", "identificador único da empresa no consórcio")
 	flag.Parse()
 
 	dataDirectory, err := resolveDataDirectory(*dataDirectoryFlag)
@@ -24,12 +25,12 @@ func main() {
 	}
 	defer logFile.Close()
 
-	srv, err := server.NewServer(":8080", filepath.Join(dataDirectory, "users.json"))
+	srv, err := server.NewServer(":8080", filepath.Join(dataDirectory, "users.json"), *companyIDFlag)
 
 	if err != nil {
 		log.Fatalf("Erro ao iniciar servidor: %v", err)
 	}
-	log.Printf("Dados persistidos em %s", dataDirectory)
+	log.Printf("Empresa: %s | Dados persistidos em %s", *companyIDFlag, dataDirectory)
 
 	if err := srv.Start(); err != nil {
 		log.Fatalf("Erro ao iniciar servidor: %v", err)
