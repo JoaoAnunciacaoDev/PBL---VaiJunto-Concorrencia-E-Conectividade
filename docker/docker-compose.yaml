@@ -88,6 +88,24 @@ services:
       empresa-a:
         condition: service_healthy
 
+  # Simulador autônomo sob alta carga de passageiros simultâneos
+  # Executar com: docker compose run --rm simulator
+  simulator:
+    image: vaijunto:local
+    command: [
+      "/app/bin/simulator",
+      "-companies=empresa-a=empresa-a:8080,empresa-b=empresa-b:8080,empresa-c=empresa-c:8080",
+      "-passengers=30",
+      "-duration=15s"
+    ]
+    depends_on:
+      empresa-a:
+        condition: service_healthy
+      empresa-b:
+        condition: service_healthy
+      empresa-c:
+        condition: service_healthy
+
 volumes:
   empresa-a-storage:
   empresa-b-storage:

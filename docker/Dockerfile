@@ -14,6 +14,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/api-server ./cmd/api-server
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/api-client ./cmd/api-client
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/seed ./cmd/seed
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/simulator ./cmd/simulator
 
 # --- Estágio Final de Execução ---
 FROM alpine:latest
