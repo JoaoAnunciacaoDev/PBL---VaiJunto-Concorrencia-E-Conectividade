@@ -2,8 +2,9 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
+	"time"
 
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 	"github.com/google/uuid"
@@ -19,6 +20,32 @@ func (s *Server) handleConfirmReservation(payload json.RawMessage, session *Sess
 		return protocol.Response{Success: "error", Message: "Requisição inválida: " + err.Error()}
 	}
 
+	if len(dto.Segments) == 0 {
+		return protocol.Response{Success: "error", Message: "Nenhum trecho informado para reserva."}
+	}
+
+	// Normaliza o CompanyID para segmentos que porventura não vieram preenchidos
+	for i := range dto.Segments {
+		if dto.Segments[i].CompanyID == "" {
+			dto.Segments[i].CompanyID = s.companyID
+		}
+	}
+
+	// Se o coordenador 2PC estiver habilitado, executa o Two-Phase Commit distribuído
+	if s.coordinator != nil {
+		if err := s.coordinator.ConfirmItinerary(session.UserID, dto.Segments); err != nil {
+			return protocol.Response{Success: "error", Message: err.Error()}
+		}
+
+		reservation, err := s.repository.RegisterConfirmedReservation(session.UserID, dto.Segments)
+		if err != nil {
+			return protocol.Response{Success: "error", Message: "Erro ao registrar reserva: " + err.Error()}
+		}
+
+		return reservationResponse(reservation, "Reserva confirmada com sucesso.")
+	}
+
+	// Fallback para modo local puro
 	reservation, err := s.repository.ConfirmReservation(session.UserID, dto.Segments)
 	if err != nil {
 		return protocol.Response{Success: "error", Message: err.Error()}
@@ -52,30 +79,57 @@ func (s *Server) handleListMyReservations(session *Session) protocol.Response {
 func (s *Server) reservationResponse(reservation models.Reservation) (protocol.ReservationResponse, error) {
 	segments := make([]protocol.ReservationStageResponse, 0, len(reservation.Segments))
 	for _, reservedSegment := range reservation.Segments {
-		ride, err := s.repository.GetRideByID(reservedSegment.RideID)
-		if err != nil {
-			return protocol.ReservationResponse{}, err
-		}
-
 		var stage *models.Stage
-		for index := range ride.Segments {
-			if ride.Segments[index].ID == reservedSegment.SegmentID {
-				stage = &ride.Segments[index]
-				break
+
+		// Se a carona é local, busca do repositório local
+		ride, err := s.repository.GetRideByID(reservedSegment.RideID)
+		if err == nil {
+			for index := range ride.Segments {
+				if ride.Segments[index].ID == reservedSegment.SegmentID {
+					stage = &ride.Segments[index]
+					break
+				}
 			}
 		}
-		if stage == nil {
-			return protocol.ReservationResponse{}, fmt.Errorf("trecho da reserva não encontrado")
+
+		// Se não encontrou localmente e pertence a um parceiro, busca do peer
+		if stage == nil && s.peers != nil && reservedSegment.CompanyID != "" && reservedSegment.CompanyID != s.companyID {
+			if peer, exists := s.peers.Get(reservedSegment.CompanyID); exists {
+				remoteRides, rErr := s.fetchRemoteRides(peer.InternalURL, reservation.CreatedAt)
+				if rErr == nil {
+					for _, r := range remoteRides {
+						if r.ID == reservedSegment.RideID {
+							for index := range r.Segments {
+								if r.Segments[index].ID == reservedSegment.SegmentID {
+									stage = &r.Segments[index]
+									break
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		var origin, dest enum.City
+		var depAt, arrAt time.Time
+		var price int
+		if stage != nil {
+			origin = stage.Origin
+			dest = stage.Destination
+			depAt = stage.DepartureAt
+			arrAt = stage.ArrivalAt
+			price = stage.PriceCents
 		}
 
 		segments = append(segments, protocol.ReservationStageResponse{
 			RideID:      reservedSegment.RideID,
 			SegmentID:   reservedSegment.SegmentID,
-			Origin:      stage.Origin,
-			Destination: stage.Destination,
-			DepartureAt: stage.DepartureAt,
-			ArrivalAt:   stage.ArrivalAt,
-			PriceCents:  stage.PriceCents,
+			Origin:      origin,
+			Destination: dest,
+			DepartureAt: depAt,
+			ArrivalAt:   arrAt,
+			PriceCents:  price,
 		})
 	}
 

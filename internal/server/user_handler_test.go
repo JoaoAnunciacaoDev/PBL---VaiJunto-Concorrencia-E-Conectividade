@@ -363,5 +363,9 @@ func newTestServerAtPath(t *testing.T, usersPath string) *Server {
 		t.Fatalf("criar servidor de teste: %v", err)
 	}
 
+	t.Cleanup(func() {
+		_ = server.Close()
+	})
+
 	return server
 }

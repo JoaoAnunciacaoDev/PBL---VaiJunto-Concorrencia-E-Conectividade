@@ -86,6 +86,40 @@ func (r *Repository) ConfirmReservation(passengerID uuid.UUID, segments []models
 	return cloneReservation(reservation), nil
 }
 
+// RegisterConfirmedReservation grava a reserva com status Confirmada no histórico do passageiro
+// após a conclusão com sucesso do protocolo 2PC (sem decrementar assentos novamente).
+func (r *Repository) RegisterConfirmedReservation(passengerID uuid.UUID, segments []models.ReservedSegment) (*models.Reservation, error) {
+	if passengerID == uuid.Nil || len(segments) == 0 {
+		return nil, errors.New("reserva inválida")
+	}
+
+	r.reservationsMu.Lock()
+	defer r.reservationsMu.Unlock()
+
+	r.usersMu.RLock()
+	defer r.usersMu.RUnlock()
+
+	if _, exists := r.userByIDLocked(passengerID); !exists {
+		return nil, errors.New("usuário inválido")
+	}
+
+	reservation := &models.Reservation{
+		ID:          uuid.New(),
+		PassengerID: passengerID,
+		Status:      enum.Confirmada,
+		Segments:    append([]models.ReservedSegment(nil), segments...),
+		CreatedAt:   time.Now(),
+	}
+	r.reservations[reservation.ID] = reservation
+
+	if err := r.saveStateLocked(); err != nil {
+		delete(r.reservations, reservation.ID)
+		return nil, fmt.Errorf("salvar reserva confirmada: %w", err)
+	}
+
+	return cloneReservation(reservation), nil
+}
+
 func (r *Repository) GetReservationsByPassengerID(passengerID uuid.UUID) ([]*models.Reservation, error) {
 	r.reservationsMu.RLock()
 	defer r.reservationsMu.RUnlock()

@@ -2,14 +2,19 @@ package server
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"net/http"
+	"path/filepath"
 	"time"
 
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/consortium"
+	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/httpapi"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/protocol"
 )
 
@@ -18,34 +23,98 @@ const (
 	defaultWriteTimeout    = 10 * time.Second
 )
 
+type ServerConfig struct {
+	CompanyID string
+	TCPAddr   string
+	HTTPAddr  string
+	UsersPath string
+	Peers     []consortium.Peer
+}
+
 type Server struct {
-	companyID  string
-	addr       string
-	repository *Repository
+	companyID   string
+	addr        string
+	httpAddr    string
+	repository  *Repository
+	peers       *consortium.PeerRegistry
+	clock       *consortium.LamportClock
+	wal         *consortium.WAL
+	lockStore   *consortium.LockStore
+	coordinator *consortium.Coordinator
+	httpServer  *httpapi.HTTPServer
+	httpClient  *http.Client
 
 	readIdleTimeout time.Duration
 	writeTimeout    time.Duration
 	maxRequestSize  int
 }
 
-// NewServer cria uma nova instância do servidor com o endereço, o caminho para o arquivo de usuários
-// e o identificador da empresa fornecidos.
-// Retorna um ponteiro para a instância do servidor e possíveis erros.
+// NewServer cria uma nova instância do servidor com valores padrão para compatibilidade.
 func NewServer(addr, usersPath, companyID string) (*Server, error) {
-	if companyID == "" {
-		companyID = "empresa-a"
+	return NewServerWithConfig(ServerConfig{
+		CompanyID: companyID,
+		TCPAddr:   addr,
+		UsersPath: usersPath,
+	})
+}
+
+// NewServerWithConfig inicializa o servidor completo com suporte a consórcio distribuído,
+// relógio de Lamport, Write-Ahead Log e servidor REST inter-empresa.
+func NewServerWithConfig(cfg ServerConfig) (*Server, error) {
+	if cfg.CompanyID == "" {
+		cfg.CompanyID = "empresa-a"
 	}
 
-	repository, err := NewRepository(usersPath)
-
+	repository, err := NewRepository(cfg.UsersPath)
 	if err != nil {
 		return nil, fmt.Errorf("carregar repositório: %w", err)
 	}
 
+	dataDir := filepath.Dir(cfg.UsersPath)
+	walPath := filepath.Join(dataDir, "wal.log")
+	wal, err := consortium.NewWAL(walPath)
+	if err != nil {
+		return nil, fmt.Errorf("inicializar WAL: %w", err)
+	}
+
+	clock := consortium.NewLamportClock(0)
+	lockStore := consortium.NewLockStore(consortium.DefaultLockTTL)
+	peers := consortium.NewPeerRegistry(cfg.Peers)
+
+	coordinator := consortium.NewCoordinator(
+		cfg.CompanyID,
+		clock,
+		peers,
+		wal,
+		lockStore,
+		repository,
+		3*time.Second,
+	)
+
+	var httpServer *httpapi.HTTPServer
+	if cfg.HTTPAddr != "" {
+		httpServer = httpapi.NewHTTPServer(
+			cfg.CompanyID,
+			cfg.HTTPAddr,
+			repository,
+			lockStore,
+			wal,
+			clock,
+		)
+	}
+
 	return &Server{
-		companyID:       companyID,
-		addr:            addr,
+		companyID:       cfg.CompanyID,
+		addr:            cfg.TCPAddr,
+		httpAddr:        cfg.HTTPAddr,
 		repository:      repository,
+		peers:           peers,
+		clock:           clock,
+		wal:             wal,
+		lockStore:       lockStore,
+		coordinator:     coordinator,
+		httpServer:      httpServer,
+		httpClient:      &http.Client{Timeout: 3 * time.Second},
 		readIdleTimeout: defaultReadIdleTimeout,
 		writeTimeout:    defaultWriteTimeout,
 		maxRequestSize:  protocol.MaxRequestSize,
@@ -55,6 +124,20 @@ func NewServer(addr, usersPath, companyID string) (*Server, error) {
 // Start inicia o servidor, escutando no endereço especificado e aceitando conexões de clientes.
 // Para cada conexão aceita, ele cria uma goroutine para lidar com a comunicação com o cliente.
 func (s *Server) Start() error {
+	// 1. Recupera e retransmite commits pendentes de transações anteriores caso o servidor tenha caído
+	if s.coordinator != nil {
+		s.coordinator.RecoverPendingCommits()
+	}
+
+	// 2. Inicia o servidor HTTP Gin inter-empresa em background se configurado
+	if s.httpServer != nil {
+		go func() {
+			if err := s.httpServer.Start(); err != nil {
+				log.Printf("[server] encerramento do servidor HTTP: %v", err)
+			}
+		}()
+	}
+
 	listener, err := net.Listen("tcp", s.addr)
 
 	if err != nil {
@@ -63,7 +146,7 @@ func (s *Server) Start() error {
 
 	defer listener.Close()
 
-	log.Printf("server started address=%s", s.addr)
+	log.Printf("server started address=%s company=%s http=%s", s.addr, s.companyID, s.httpAddr)
 
 	for {
 		conn, err := listener.Accept()
@@ -147,6 +230,19 @@ func (s *Server) sendResponse(conn net.Conn, encoder *json.Encoder, response pro
 	}
 	defer conn.SetWriteDeadline(time.Time{})
 	return protocol.SendJson(encoder, response)
+}
+
+// Close encerra os recursos persistentes abertos pelo servidor (como o WAL e HTTP server).
+func (s *Server) Close() error {
+	if s.wal != nil {
+		_ = s.wal.Close()
+	}
+	if s.httpServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = s.httpServer.Stop(ctx)
+	}
+	return nil
 }
 
 // processRequest processa a solicitação recebida do cliente com base na ação especificada.

@@ -2,8 +2,11 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/models"
@@ -12,14 +15,20 @@ import (
 )
 
 type itineraryEdge struct {
-	rideID uuid.UUID
-	stage  models.Stage
+	companyID string
+	rideID    uuid.UUID
+	stage     models.Stage
+}
+
+type RideSource struct {
+	CompanyID string
+	Ride      *models.Ride
 }
 
 // handleSearchItineraries lida com a solicitação de busca de itinerários.
 // Ele verifica se o usuário está autenticado, valida os parâmetros da solicitação,
-// busca caronas ativas na data especificada e procura itinerários que conectem a origem e o destino.
-// Retorna uma resposta com os itinerários encontrados ou uma mensagem de erro.
+// busca caronas locais e consulta os servidores de outras empresas do consórcio via API REST,
+// compondo itinerários que conectem a origem e o destino através de qualquer empresa do consórcio.
 func (s *Server) handleSearchItineraries(payload json.RawMessage, session *Session) protocol.Response {
 	if response, ok := s.passengerForSession(session); !ok {
 		return response
@@ -33,13 +42,63 @@ func (s *Server) handleSearchItineraries(payload json.RawMessage, session *Sessi
 		return protocol.Response{Success: "error", Message: "Origem, destino e data válidos são obrigatórios."}
 	}
 
-	rides, err := s.repository.GetActiveRidesByDate(dto.Date)
-	if err != nil {
-		return protocol.Response{Success: "error", Message: "Não foi possível buscar caronas."}
+	var sources []RideSource
+
+	// 1. Caronas locais
+	localRides, err := s.repository.GetActiveRidesByDate(dto.Date)
+	if err == nil {
+		for _, ride := range localRides {
+			sources = append(sources, RideSource{
+				CompanyID: s.companyID,
+				Ride:      ride,
+			})
+		}
 	}
 
-	itineraries := searchItineraries(rides, dto.Origin, dto.Destination)
+	// 2. Consulta paralela/tolerante a falhas aos servidores parceiros do consórcio
+	if s.peers != nil {
+		for _, peer := range s.peers.All() {
+			remoteRides, err := s.fetchRemoteRides(peer.InternalURL, dto.Date)
+			if err != nil {
+				// Queda ou lentidão de um servidor parceiro é tolerada: os demais continuam operando
+				continue
+			}
+			for _, ride := range remoteRides {
+				sources = append(sources, RideSource{
+					CompanyID: peer.CompanyID,
+					Ride:      ride,
+				})
+			}
+		}
+	}
+
+	itineraries := searchItinerariesFromSources(sources, dto.Origin, dto.Destination)
 	return rideResponse(itineraries, "Itinerários obtidos com sucesso.")
+}
+
+func (s *Server) fetchRemoteRides(baseURL string, date time.Time) ([]*models.Ride, error) {
+	url := fmt.Sprintf("%s/internal/v1/rides?date=%s", baseURL, date.Format("2006-01-02"))
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("peer retornou status %d", resp.StatusCode)
+	}
+
+	var rides []*models.Ride
+	if err := json.NewDecoder(resp.Body).Decode(&rides); err != nil {
+		return nil, err
+	}
+
+	return rides, nil
 }
 
 func (s *Server) passengerForSession(session *Session) (protocol.Response, bool) {
@@ -56,12 +115,28 @@ func (s *Server) passengerForSession(session *Session) (protocol.Response, bool)
 	return protocol.Response{}, true
 }
 
+// searchItineraries é mantido para compatibilidade com testes unitários locais existentes.
 func searchItineraries(rides []*models.Ride, origin, destination enum.City) []protocol.ItineraryResponse {
-	edgesByOrigin := make(map[enum.City][]itineraryEdge)
+	sources := make([]RideSource, 0, len(rides))
 	for _, ride := range rides {
-		for _, stage := range ride.Segments {
+		sources = append(sources, RideSource{
+			CompanyID: "empresa-a",
+			Ride:      ride,
+		})
+	}
+	return searchItinerariesFromSources(sources, origin, destination)
+}
+
+func searchItinerariesFromSources(sources []RideSource, origin, destination enum.City) []protocol.ItineraryResponse {
+	edgesByOrigin := make(map[enum.City][]itineraryEdge)
+	for _, src := range sources {
+		for _, stage := range src.Ride.Segments {
 			if stage.AvailableSeats > 0 {
-				edgesByOrigin[stage.Origin] = append(edgesByOrigin[stage.Origin], itineraryEdge{rideID: ride.ID, stage: stage})
+				edgesByOrigin[stage.Origin] = append(edgesByOrigin[stage.Origin], itineraryEdge{
+					companyID: src.CompanyID,
+					rideID:    src.Ride.ID,
+					stage:     stage,
+				})
 			}
 		}
 	}
@@ -125,6 +200,7 @@ func itineraryFromPath(path []itineraryEdge) protocol.ItineraryResponse {
 		segments = append(segments, protocol.ItinerarySegmentResponse{
 			RideID:         edge.rideID,
 			SegmentID:      edge.stage.ID,
+			CompanyID:      edge.companyID,
 			Origin:         edge.stage.Origin,
 			Destination:    edge.stage.Destination,
 			DepartureAt:    edge.stage.DepartureAt,
