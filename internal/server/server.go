@@ -11,6 +11,8 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/consortium"
@@ -24,11 +26,13 @@ const (
 )
 
 type ServerConfig struct {
-	CompanyID string
-	TCPAddr   string
-	HTTPAddr  string
-	UsersPath string
-	Peers     []consortium.Peer
+	CompanyID   string
+	TCPAddr     string
+	HTTPAddr    string
+	UsersPath   string
+	Peers       []consortium.Peer
+	LockTTL     time.Duration
+	HTTPTimeout time.Duration
 }
 
 type Server struct {
@@ -43,6 +47,11 @@ type Server struct {
 	coordinator *consortium.Coordinator
 	httpServer  *httpapi.HTTPServer
 	httpClient  *http.Client
+
+	listener      net.Listener
+	listenerMu    sync.Mutex
+	closed        atomic.Bool
+	actualTCPAddr string
 
 	readIdleTimeout time.Duration
 	writeTimeout    time.Duration
@@ -77,8 +86,18 @@ func NewServerWithConfig(cfg ServerConfig) (*Server, error) {
 		return nil, fmt.Errorf("inicializar WAL: %w", err)
 	}
 
+	lockTTL := cfg.LockTTL
+	if lockTTL <= 0 {
+		lockTTL = consortium.DefaultLockTTL
+	}
+
+	httpTimeout := cfg.HTTPTimeout
+	if httpTimeout <= 0 {
+		httpTimeout = 3 * time.Second
+	}
+
 	clock := consortium.NewLamportClock(0)
-	lockStore := consortium.NewLockStore(consortium.DefaultLockTTL)
+	lockStore := consortium.NewLockStore(lockTTL)
 	peers := consortium.NewPeerRegistry(cfg.Peers)
 
 	coordinator := consortium.NewCoordinator(
@@ -88,7 +107,7 @@ func NewServerWithConfig(cfg ServerConfig) (*Server, error) {
 		wal,
 		lockStore,
 		repository,
-		3*time.Second,
+		httpTimeout,
 	)
 
 	var httpServer *httpapi.HTTPServer
@@ -114,7 +133,7 @@ func NewServerWithConfig(cfg ServerConfig) (*Server, error) {
 		lockStore:       lockStore,
 		coordinator:     coordinator,
 		httpServer:      httpServer,
-		httpClient:      &http.Client{Timeout: 3 * time.Second},
+		httpClient:      &http.Client{Timeout: httpTimeout},
 		readIdleTimeout: defaultReadIdleTimeout,
 		writeTimeout:    defaultWriteTimeout,
 		maxRequestSize:  protocol.MaxRequestSize,
@@ -139,19 +158,32 @@ func (s *Server) Start() error {
 	}
 
 	listener, err := net.Listen("tcp", s.addr)
-
 	if err != nil {
 		return fmt.Errorf("Erro ao iniciar o servidor: %v", err)
 	}
 
-	defer listener.Close()
+	s.listenerMu.Lock()
+	s.listener = listener
+	s.actualTCPAddr = listener.Addr().String()
+	s.listenerMu.Unlock()
 
-	log.Printf("server started address=%s company=%s http=%s", s.addr, s.companyID, s.httpAddr)
+	defer func() {
+		s.listenerMu.Lock()
+		if s.listener != nil {
+			_ = s.listener.Close()
+			s.listener = nil
+		}
+		s.listenerMu.Unlock()
+	}()
+
+	log.Printf("server started address=%s company=%s http=%s", s.actualTCPAddr, s.companyID, s.httpAddr)
 
 	for {
 		conn, err := listener.Accept()
-
 		if err != nil {
+			if s.closed.Load() || errors.Is(err, net.ErrClosed) {
+				return nil
+			}
 			log.Printf("accept connection failed error=%v", err)
 			continue
 		}
@@ -232,8 +264,17 @@ func (s *Server) sendResponse(conn net.Conn, encoder *json.Encoder, response pro
 	return protocol.SendJson(encoder, response)
 }
 
-// Close encerra os recursos persistentes abertos pelo servidor (como o WAL e HTTP server).
+// Close encerra os recursos persistentes abertos pelo servidor (como o WAL, listener TCP e HTTP server).
 func (s *Server) Close() error {
+	s.closed.Store(true)
+
+	s.listenerMu.Lock()
+	if s.listener != nil {
+		_ = s.listener.Close()
+		s.listener = nil
+	}
+	s.listenerMu.Unlock()
+
 	if s.wal != nil {
 		_ = s.wal.Close()
 	}
@@ -243,6 +284,52 @@ func (s *Server) Close() error {
 		_ = s.httpServer.Stop(ctx)
 	}
 	return nil
+}
+
+// TCPAddr retorna o endereço TCP real onde o listener está escutando.
+func (s *Server) TCPAddr() string {
+	s.listenerMu.Lock()
+	defer s.listenerMu.Unlock()
+	if s.listener != nil {
+		return s.listener.Addr().String()
+	}
+	if s.actualTCPAddr != "" {
+		return s.actualTCPAddr
+	}
+	return s.addr
+}
+
+// HTTPAddr retorna o endereço HTTP real onde o servidor Gin está escutando.
+func (s *Server) HTTPAddr() string {
+	if s.httpServer != nil {
+		return s.httpServer.Addr()
+	}
+	return s.httpAddr
+}
+
+// Repository expõe o repositório do servidor para inspeção em testes.
+func (s *Server) Repository() *Repository {
+	return s.repository
+}
+
+// LockStore expõe a store de locks do servidor para inspeção em testes.
+func (s *Server) LockStore() *consortium.LockStore {
+	return s.lockStore
+}
+
+// Clock expõe o relógio lógico de Lamport do servidor para inspeção em testes.
+func (s *Server) Clock() *consortium.LamportClock {
+	return s.clock
+}
+
+// Peers expõe o registro de peers para testes.
+func (s *Server) Peers() *consortium.PeerRegistry {
+	return s.peers
+}
+
+// Coordinator expõe o coordenador 2PC para testes.
+func (s *Server) Coordinator() *consortium.Coordinator {
+	return s.coordinator
 }
 
 // processRequest processa a solicitação recebida do cliente com base na ação especificada.

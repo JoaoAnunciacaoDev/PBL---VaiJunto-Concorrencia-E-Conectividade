@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/consortium"
@@ -26,6 +28,9 @@ type RepositoryReader interface {
 type HTTPServer struct {
 	companyID  string
 	addr       string
+	actualAddr string
+	listener   net.Listener
+	mu         sync.Mutex
 	repo       RepositoryReader
 	lockStore  *consortium.LockStore
 	wal        *consortium.WAL
@@ -76,28 +81,59 @@ func (s *HTTPServer) setupRoutes() {
 	}
 }
 
+// Addr retorna o endereço real em que o servidor HTTP está escutando.
+func (s *HTTPServer) Addr() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.actualAddr != "" {
+		return s.actualAddr
+	}
+	return s.addr
+}
+
 // Start inicia o servidor HTTP e a goroutine de expiração de locks por TTL.
 func (s *HTTPServer) Start() error {
+	listener, err := net.Listen("tcp", s.addr)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.listener = listener
+	s.actualAddr = listener.Addr().String()
+	s.mu.Unlock()
+
 	s.httpServer = &http.Server{
-		Addr:    s.addr,
 		Handler: s.engine,
 	}
 
 	go s.startLockReaper()
 
-	log.Printf("[httpapi] servidor REST inter-empresa iniciado empresa=%s addr=%s", s.companyID, s.addr)
-	if err := s.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	log.Printf("[httpapi] servidor REST inter-empresa iniciado empresa=%s addr=%s", s.companyID, s.actualAddr)
+	if err := s.httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
 }
 
-// Stop encerra o servidor HTTP graciosamente.
+// Stop encerra o servidor HTTP.
 func (s *HTTPServer) Stop(ctx context.Context) error {
-	close(s.stopChan)
+	s.mu.Lock()
+	select {
+	case <-s.stopChan:
+		// já fechado
+	default:
+		close(s.stopChan)
+	}
+	s.mu.Unlock()
+
 	if s.httpServer != nil {
 		return s.httpServer.Shutdown(ctx)
 	}
+	s.mu.Lock()
+	if s.listener != nil {
+		_ = s.listener.Close()
+	}
+	s.mu.Unlock()
 	return nil
 }
 

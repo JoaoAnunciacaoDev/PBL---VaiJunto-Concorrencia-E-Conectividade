@@ -142,8 +142,17 @@ func (c *Coordinator) ConfirmItinerary(passengerID uuid.UUID, segments []models.
 	log.Printf("[coordinator] decisão COMMIT confirmada no WAL para tx_id=%s. Efetivando assentos...", txID)
 
 	// FASE 2: COMMIT
+	var commitErr error
 	for _, segment := range segments {
-		c.commitSegment(txID, segment)
+		if err := c.commitSegment(txID, segment); err != nil {
+			commitErr = err
+			break
+		}
+	}
+
+	if commitErr != nil {
+		log.Printf("[coordinator] falha ao comitar itinerário via 2PC tx_id=%s: %v", txID, commitErr)
+		return commitErr
 	}
 
 	log.Printf("[coordinator] itinerário confirmado com sucesso via 2PC tx_id=%s", txID)
@@ -266,17 +275,25 @@ func (c *Coordinator) abortPreparedSegments(txID string, segments []models.Reser
 	}
 }
 
-func (c *Coordinator) commitSegment(txID string, segment models.ReservedSegment) {
+func (c *Coordinator) commitSegment(txID string, segment models.ReservedSegment) error {
 	if segment.CompanyID == c.companyID {
-		_ = c.repo.DecrementSeat(segment.RideID, segment.SegmentID)
+		lock, hasLock := c.lockStore.Get(segment.SegmentID.String())
+		if !hasLock || lock.TxID != txID {
+			return fmt.Errorf("lock local expirado ou desalojado para tx_id=%s", txID)
+		}
+		if err := c.repo.DecrementSeat(segment.RideID, segment.SegmentID); err != nil {
+			c.lockStore.Release(segment.SegmentID.String(), txID)
+			return err
+		}
 		c.lockStore.Release(segment.SegmentID.String(), txID)
-		return
+		return nil
 	}
 
 	peer, exists := c.peers.Get(segment.CompanyID)
 	if !exists {
-		log.Printf("[coordinator] erro ao enviar commit: peer %s não encontrado para tx_id=%s", segment.CompanyID, txID)
-		return
+		err := fmt.Errorf("peer %s não encontrado para tx_id=%s", segment.CompanyID, txID)
+		log.Printf("[coordinator] %v", err)
+		return err
 	}
 
 	reqBody, _ := json.Marshal(map[string]any{
@@ -289,20 +306,31 @@ func (c *Coordinator) commitSegment(txID string, segment models.ReservedSegment)
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(reqBody))
 	if err != nil {
 		log.Printf("[coordinator] erro ao montar commit para peer %s: %v", segment.CompanyID, err)
-		return
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		log.Printf("[coordinator] falha de comunicação no commit para peer %s (será retransmitido no recovery): %v", segment.CompanyID, err)
-		return
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[coordinator] commit retornou código inesperado %d do peer %s para tx_id=%s", resp.StatusCode, segment.CompanyID, txID)
+		var errData struct {
+			Reason string `json:"reason"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&errData)
+		reason := errData.Reason
+		if reason == "" {
+			reason = fmt.Sprintf("status HTTP %d", resp.StatusCode)
+		}
+		log.Printf("[coordinator] commit retornou erro do peer %s para tx_id=%s: %s", segment.CompanyID, txID, reason)
+		return fmt.Errorf("peer %s rejeitou commit: %s", segment.CompanyID, reason)
 	}
+
+	return nil
 }
 
 // RecoverPendingCommits varre o WAL na inicialização do servidor e retransmite
