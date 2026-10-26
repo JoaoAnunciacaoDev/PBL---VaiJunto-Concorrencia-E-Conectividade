@@ -103,6 +103,22 @@ func (r *Repository) GetRideByID(id uuid.UUID) (*models.Ride, error) {
 	return cloneRide(ride), nil
 }
 
+// GetRideBySegmentID busca a carona que contém o segmento especificado.
+func (r *Repository) GetRideBySegmentID(segmentID uuid.UUID) (*models.Ride, error) {
+	r.ridesMu.RLock()
+	defer r.ridesMu.RUnlock()
+
+	for _, ride := range r.rides {
+		for _, s := range ride.Segments {
+			if s.ID == segmentID {
+				return cloneRide(ride), nil
+			}
+		}
+	}
+
+	return nil, errors.New("carona contendo o trecho não encontrada")
+}
+
 func (r *Repository) GetRidesByDriverID(driverID uuid.UUID) ([]*models.Ride, error) {
 	r.ridesMu.RLock()
 	defer r.ridesMu.RUnlock()
@@ -184,10 +200,20 @@ func sameCalendarDate(first, second time.Time) bool {
 	return firstYear == secondYear && firstMonth == secondMonth && firstDay == secondDay
 }
 
-// DecrementSeat decrementa em 1 os assentos disponíveis de um trecho específico e persiste o estado.
-func (r *Repository) DecrementSeat(rideID, segmentID uuid.UUID) error {
+// DecrementSeatIdempotent decrementa em 1 os assentos disponíveis de um trecho específico
+// garantindo que o mesmo tx_id não provoque dois decrementos, mesmo após falhas ou retransmissões.
+func (r *Repository) DecrementSeatIdempotent(rideID, segmentID uuid.UUID, txID string) error {
 	r.ridesMu.Lock()
 	defer r.ridesMu.Unlock()
+
+	key := ""
+	if txID != "" {
+		key = txID + ":" + segmentID.String()
+		if r.appliedTx[key] {
+			// Já aplicado anteriormente com sucesso: idempotência garantida
+			return nil
+		}
+	}
 
 	ride, exists := r.rides[rideID]
 	if !exists || ride.Cancelled {
@@ -200,8 +226,14 @@ func (r *Repository) DecrementSeat(rideID, segmentID uuid.UUID) error {
 				return errors.New("não há assentos disponíveis no trecho")
 			}
 			ride.Segments[i].AvailableSeats--
+			if key != "" {
+				r.appliedTx[key] = true
+			}
 			if err := r.saveStateLocked(); err != nil {
 				ride.Segments[i].AvailableSeats++
+				if key != "" {
+					delete(r.appliedTx, key)
+				}
 				return fmt.Errorf("salvar estado após decrementar assento: %w", err)
 			}
 			return nil
@@ -209,6 +241,23 @@ func (r *Repository) DecrementSeat(rideID, segmentID uuid.UUID) error {
 	}
 
 	return errors.New("trecho não encontrado")
+}
+
+// DecrementSeat decrementa em 1 os assentos disponíveis de um trecho específico e persiste o estado.
+func (r *Repository) DecrementSeat(rideID, segmentID uuid.UUID) error {
+	return r.DecrementSeatIdempotent(rideID, segmentID, "")
+}
+
+// IsTxApplied verifica se a transação especificada já teve o efeito de decremento aplicado no repositório.
+func (r *Repository) IsTxApplied(txID string, segmentID uuid.UUID) bool {
+	r.ridesMu.RLock()
+	defer r.ridesMu.RUnlock()
+
+	if txID == "" {
+		return false
+	}
+	key := txID + ":" + segmentID.String()
+	return r.appliedTx[key]
 }
 
 // IncrementSeat incrementa em 1 os assentos disponíveis de um trecho específico e persiste o estado.

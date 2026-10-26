@@ -17,11 +17,15 @@ import (
 )
 
 type mockRepo struct {
-	rides map[uuid.UUID]*models.Ride
+	rides     map[uuid.UUID]*models.Ride
+	appliedTx map[string]bool
 }
 
 func newMockRepo() *mockRepo {
-	return &mockRepo{rides: make(map[uuid.UUID]*models.Ride)}
+	return &mockRepo{
+		rides:     make(map[uuid.UUID]*models.Ride),
+		appliedTx: make(map[string]bool),
+	}
 }
 
 func (m *mockRepo) GetActiveRidesByDate(date time.Time) ([]*models.Ride, error) {
@@ -40,7 +44,26 @@ func (m *mockRepo) GetRideByID(id uuid.UUID) (*models.Ride, error) {
 	return r, nil
 }
 
-func (m *mockRepo) DecrementSeat(rideID, segmentID uuid.UUID) error {
+func (m *mockRepo) GetRideBySegmentID(segmentID uuid.UUID) (*models.Ride, error) {
+	for _, r := range m.rides {
+		for _, s := range r.Segments {
+			if s.ID == segmentID {
+				return r, nil
+			}
+		}
+	}
+	return nil, errors.New("ride by segment not found")
+}
+
+func (m *mockRepo) DecrementSeatIdempotent(rideID, segmentID uuid.UUID, txID string) error {
+	key := ""
+	if txID != "" {
+		key = txID + ":" + segmentID.String()
+		if m.appliedTx[key] {
+			return nil
+		}
+	}
+
 	r, exists := m.rides[rideID]
 	if !exists {
 		return errors.New("ride not found")
@@ -51,10 +74,24 @@ func (m *mockRepo) DecrementSeat(rideID, segmentID uuid.UUID) error {
 				return errors.New("no seats")
 			}
 			r.Segments[i].AvailableSeats--
+			if key != "" {
+				m.appliedTx[key] = true
+			}
 			return nil
 		}
 	}
 	return errors.New("segment not found")
+}
+
+func (m *mockRepo) DecrementSeat(rideID, segmentID uuid.UUID) error {
+	return m.DecrementSeatIdempotent(rideID, segmentID, "")
+}
+
+func (m *mockRepo) IsTxApplied(txID string, segmentID uuid.UUID) bool {
+	if txID == "" {
+		return false
+	}
+	return m.appliedTx[txID+":"+segmentID.String()]
 }
 
 func (m *mockRepo) IncrementSeat(rideID, segmentID uuid.UUID) error {
@@ -71,7 +108,7 @@ func (m *mockRepo) IncrementSeat(rideID, segmentID uuid.UUID) error {
 	return errors.New("segment not found")
 }
 
-func setupTestServer(t *testing.T) (*HTTPServer, *mockRepo) {
+func setupTestServer(t *testing.T) (*HTTPServer, *mockRepo, *consortium.WAL, *consortium.LockStore) {
 	t.Helper()
 	repo := newMockRepo()
 	lockStore := consortium.NewLockStore(5 * time.Second)
@@ -84,11 +121,11 @@ func setupTestServer(t *testing.T) (*HTTPServer, *mockRepo) {
 	clock := consortium.NewLamportClock(0)
 
 	server := NewHTTPServer("empresa-a", ":8081", repo, lockStore, wal, clock)
-	return server, repo
+	return server, repo, wal, lockStore
 }
 
 func TestHealthEndpoint(t *testing.T) {
-	server, _ := setupTestServer(t)
+	server, _, _, _ := setupTestServer(t)
 
 	req, _ := http.NewRequest(http.MethodGet, "/internal/v1/health", nil)
 	resp := httptest.NewRecorder()
@@ -109,7 +146,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestGetRidesEndpoint(t *testing.T) {
-	server, repo := setupTestServer(t)
+	server, repo, _, _ := setupTestServer(t)
 	now := time.Now()
 	rideID := uuid.New()
 	repo.rides[rideID] = &models.Ride{
@@ -139,7 +176,7 @@ func TestGetRidesEndpoint(t *testing.T) {
 }
 
 func Test2PCPrepareCommitAbortFlow(t *testing.T) {
-	server, repo := setupTestServer(t)
+	server, repo, _, _ := setupTestServer(t)
 	now := time.Now()
 	rideID := uuid.New()
 	segmentID := uuid.New()
@@ -218,7 +255,7 @@ func Test2PCPrepareCommitAbortFlow(t *testing.T) {
 }
 
 func Test2PCAbortFlow(t *testing.T) {
-	server, repo := setupTestServer(t)
+	server, repo, _, _ := setupTestServer(t)
 	now := time.Now()
 	rideID := uuid.New()
 	segmentID := uuid.New()
@@ -272,5 +309,170 @@ func Test2PCAbortFlow(t *testing.T) {
 	server.Engine().ServeHTTP(respRePrep, reqRePrep)
 	if respRePrep.Code != http.StatusOK {
 		t.Fatalf("esperado novo prepare com sucesso após abort, obtido %d", respRePrep.Code)
+	}
+}
+
+// TestPrepareWALWriteFailureRejectsVoteAndReleasesLock testa que se a escrita no WAL
+// falhar durante o handlePrepare, o servidor responde HTTP 500 e libera o lock imediatamente.
+func TestPrepareWALWriteFailureRejectsVoteAndReleasesLock(t *testing.T) {
+	server, repo, wal, lockStore := setupTestServer(t)
+	now := time.Now()
+	rideID := uuid.New()
+	segmentID := uuid.New()
+	repo.rides[rideID] = &models.Ride{
+		ID:          rideID,
+		DriverID:    uuid.New(),
+		DepartureAt: now,
+		Segments: []models.Stage{
+			{ID: segmentID, Origin: enum.Salvador, Destination: enum.FeiraDeSantana, AvailableSeats: 1, DepartureAt: now, ArrivalAt: now.Add(time.Hour)},
+		},
+	}
+
+	// Fecha intencionalmente o arquivo do WAL para forçar erro de escrita I/O
+	_ = wal.Close()
+
+	prepBody, _ := json.Marshal(PrepareRequest{
+		TxID:                 "tx-wal-fail",
+		CoordinatorCompanyID: "empresa-b",
+		LamportClock:         5,
+		PassengerID:          uuid.New(),
+		RideID:               rideID,
+	})
+	req, _ := http.NewRequest(http.MethodPost, "/internal/v1/segments/"+segmentID.String()+"/prepare", bytes.NewReader(prepBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	server.Engine().ServeHTTP(resp, req)
+
+	// O voto DEVE ser rejeitado com HTTP 500
+	if resp.Code != http.StatusInternalServerError {
+		t.Fatalf("esperado status 500 por falha de WAL, obtido %d", resp.Code)
+	}
+
+	// O lock DEVE ter sido liberado
+	if _, exists := lockStore.Get(segmentID.String()); exists {
+		t.Fatal("lock não foi liberado após falha de escrita no WAL")
+	}
+}
+
+// TestLateAbortDoesNotRevertCommitted valida que um abort tardio para uma transação
+// que já é COMMITTED responde 200 OK (no-op), não altera o WAL para ABORTED e não toca no assento.
+func TestLateAbortDoesNotRevertCommitted(t *testing.T) {
+	server, repo, wal, _ := setupTestServer(t)
+	now := time.Now()
+	rideID := uuid.New()
+	segmentID := uuid.New()
+	repo.rides[rideID] = &models.Ride{
+		ID:          rideID,
+		DriverID:    uuid.New(),
+		DepartureAt: now,
+		Segments: []models.Stage{
+			{ID: segmentID, Origin: enum.Salvador, Destination: enum.FeiraDeSantana, AvailableSeats: 2, DepartureAt: now, ArrivalAt: now.Add(time.Hour)},
+		},
+	}
+
+	txID := "tx-late-abort"
+
+	// 1. Prepare
+	prepBody, _ := json.Marshal(PrepareRequest{
+		TxID:                 txID,
+		CoordinatorCompanyID: "empresa-b",
+		LamportClock:         1,
+		PassengerID:          uuid.New(),
+		RideID:               rideID,
+	})
+	reqPrep, _ := http.NewRequest(http.MethodPost, "/internal/v1/segments/"+segmentID.String()+"/prepare", bytes.NewReader(prepBody))
+	respPrep := httptest.NewRecorder()
+	server.Engine().ServeHTTP(respPrep, reqPrep)
+	if respPrep.Code != http.StatusOK {
+		t.Fatalf("prepare falhou: %d", respPrep.Code)
+	}
+
+	// 2. Commit
+	commitBody, _ := json.Marshal(CommitRequest{
+		TxID:                 txID,
+		CoordinatorCompanyID: "empresa-b",
+		RideID:               rideID,
+	})
+	reqCommit, _ := http.NewRequest(http.MethodPost, "/internal/v1/segments/"+segmentID.String()+"/commit", bytes.NewReader(commitBody))
+	respCommit := httptest.NewRecorder()
+	server.Engine().ServeHTTP(respCommit, reqCommit)
+	if respCommit.Code != http.StatusOK {
+		t.Fatalf("commit falhou: %d", respCommit.Code)
+	}
+
+	// Vagas foram para 1
+	if repo.rides[rideID].Segments[0].AvailableSeats != 1 {
+		t.Fatalf("assento deveria ser 1, obtido %d", repo.rides[rideID].Segments[0].AvailableSeats)
+	}
+
+	// 3. Abort atrasado
+	abortBody, _ := json.Marshal(AbortRequest{
+		TxID:                 txID,
+		CoordinatorCompanyID: "empresa-b",
+	})
+	reqAbort, _ := http.NewRequest(http.MethodPost, "/internal/v1/segments/"+segmentID.String()+"/abort", bytes.NewReader(abortBody))
+	respAbort := httptest.NewRecorder()
+	server.Engine().ServeHTTP(respAbort, reqAbort)
+	if respAbort.Code != http.StatusOK {
+		t.Fatalf("abort tardio deveria responder 200, obtido %d", respAbort.Code)
+	}
+
+	// Vagas devem continuar em 1 (não voltam para 2!)
+	if repo.rides[rideID].Segments[0].AvailableSeats != 1 {
+		t.Fatalf("FALHA: abort tardio incrementou vagas indevidamente! obtido %d", repo.rides[rideID].Segments[0].AvailableSeats)
+	}
+
+	// Estado consolidado no WAL deve continuar COMMITTED
+	state, _, err := wal.GetTxState(txID)
+	if err != nil || state != consortium.TxCommitted {
+		t.Fatalf("estado no WAL foi corrompido: state=%s err=%v", state, err)
+	}
+}
+
+// TestParticipantRecoveryAppliesPendingCommit valida que, se o participante registrou COMMITTED
+// no WAL mas caiu antes do efeito no repositório, o RecoverParticipant reaplica o efeito no reinício.
+func TestParticipantRecoveryAppliesPendingCommit(t *testing.T) {
+	server, repo, wal, _ := setupTestServer(t)
+	now := time.Now()
+	rideID := uuid.New()
+	segmentID := uuid.New()
+	repo.rides[rideID] = &models.Ride{
+		ID:          rideID,
+		DriverID:    uuid.New(),
+		DepartureAt: now,
+		Segments: []models.Stage{
+			{ID: segmentID, Origin: enum.Salvador, Destination: enum.FeiraDeSantana, AvailableSeats: 2, DepartureAt: now, ArrivalAt: now.Add(time.Hour)},
+		},
+	}
+
+	txID := "tx-pending-effect"
+
+	// Simula entrada no WAL COMMITTED para o participante (mas sem chamar decrementSeat ainda)
+	_ = wal.Append(consortium.WALEntry{
+		TxID:          txID,
+		Role:          "participant",
+		Status:        consortium.TxCommitted,
+		CoordinatorID: "empresa-coord",
+		SegmentIDs:    []string{segmentID.String()},
+		UpdatedAt:     time.Now(),
+	})
+
+	// Assentos ainda estão em 2
+	if repo.rides[rideID].Segments[0].AvailableSeats != 2 {
+		t.Fatalf("assento deveria ser 2 antes do recovery")
+	}
+
+	// Executa a recuperação do participante
+	server.RecoverParticipant()
+
+	// Assentos agora devem ter sido debitados para 1!
+	if repo.rides[rideID].Segments[0].AvailableSeats != 1 {
+		t.Fatalf("assento deveria ser debitado pelo recovery para 1, obtido %d", repo.rides[rideID].Segments[0].AvailableSeats)
+	}
+
+	// E se rodar o recovery novamente, a idempotência garante que continua em 1
+	server.RecoverParticipant()
+	if repo.rides[rideID].Segments[0].AvailableSeats != 1 {
+		t.Fatalf("assento não deveria ser debitado duas vezes, obtido %d", repo.rides[rideID].Segments[0].AvailableSeats)
 	}
 }

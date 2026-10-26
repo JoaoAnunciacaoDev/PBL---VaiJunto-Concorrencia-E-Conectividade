@@ -23,6 +23,9 @@ type Repository struct {
 	reservationsMu sync.RWMutex
 	reservations   map[uuid.UUID]*models.Reservation
 
+	appliedTxMu sync.RWMutex
+	appliedTx   map[string]bool // chave: txID + ":" + segmentID.String()
+
 	statePath        string
 	usersPath        string
 	driversPath      string
@@ -43,6 +46,7 @@ func NewRepository(usersPath string) (*Repository, error) {
 		drivers:          make(map[uuid.UUID]*models.Driver),
 		rides:            make(map[uuid.UUID]*models.Ride),
 		reservations:     make(map[uuid.UUID]*models.Reservation),
+		appliedTx:        make(map[string]bool),
 		statePath:        filepath.Join(dataDirectory, "state.json"),
 		usersPath:        usersPath,
 		driversPath:      filepath.Join(dataDirectory, "drivers.json"),

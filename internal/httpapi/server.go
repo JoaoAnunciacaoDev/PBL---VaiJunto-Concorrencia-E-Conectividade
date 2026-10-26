@@ -20,8 +20,11 @@ import (
 type RepositoryReader interface {
 	GetActiveRidesByDate(date time.Time) ([]*models.Ride, error)
 	GetRideByID(id uuid.UUID) (*models.Ride, error)
+	GetRideBySegmentID(segmentID uuid.UUID) (*models.Ride, error)
 	DecrementSeat(rideID, segmentID uuid.UUID) error
 	IncrementSeat(rideID, segmentID uuid.UUID) error
+	DecrementSeatIdempotent(rideID, segmentID uuid.UUID, txID string) error
+	IsTxApplied(txID string, segmentID uuid.UUID) bool
 }
 
 // HTTPServer encapsula o servidor REST em Gin para comunicação inter-servidores.
@@ -91,8 +94,47 @@ func (s *HTTPServer) Addr() string {
 	return s.addr
 }
 
+// RecoverParticipant recupera o estado durável do participante após queda/reinicialização.
+// Se houver transações marcadas como COMMITTED no WAL cujo efeito ainda não tenha sido
+// aplicado no repositório, o decremento é reaplicado de maneira idempotente.
+func (s *HTTPServer) RecoverParticipant() {
+	if s.wal == nil || s.repo == nil {
+		return
+	}
+
+	entries, err := s.wal.ReadAll()
+	if err != nil {
+		log.Printf("[httpapi] erro ao ler WAL no recovery do participante: %v", err)
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.Role == "participant" && entry.Status == consortium.TxCommitted {
+			for _, segStr := range entry.SegmentIDs {
+				segID, err := uuid.Parse(segStr)
+				if err != nil {
+					continue
+				}
+
+				if !s.repo.IsTxApplied(entry.TxID, segID) {
+					ride, err := s.repo.GetRideBySegmentID(segID)
+					if err == nil {
+						log.Printf("[httpapi] recovery participante: aplicando efeito pendente tx_id=%s seg=%s", entry.TxID, segID)
+						_ = s.repo.DecrementSeatIdempotent(ride.ID, segID, entry.TxID)
+					} else {
+						log.Printf("[httpapi] recovery participante: carona não encontrada para seg=%s tx_id=%s: %v", segID, entry.TxID, err)
+					}
+				}
+			}
+		}
+	}
+}
+
 // Start inicia o servidor HTTP e a goroutine de expiração de locks por TTL.
 func (s *HTTPServer) Start() error {
+	// Recupera estado de transações commitadas locais antes de aceitar tráfego
+	s.RecoverParticipant()
+
 	listener, err := net.Listen("tcp", s.addr)
 	if err != nil {
 		return err
@@ -143,6 +185,7 @@ func (s *HTTPServer) Engine() *gin.Engine {
 }
 
 // startLockReaper varre periodicamente locks expirados e os registra no WAL.
+// Locks com IsPrepared == true são ignorados pelo LockStore.ExpireAll().
 func (s *HTTPServer) startLockReaper() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()

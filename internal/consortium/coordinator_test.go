@@ -15,7 +15,8 @@ import (
 )
 
 type coordinatorMockRepo struct {
-	rides map[uuid.UUID]*models.Ride
+	rides     map[uuid.UUID]*models.Ride
+	appliedTx map[string]bool
 }
 
 func (m *coordinatorMockRepo) GetRideByID(id uuid.UUID) (*models.Ride, error) {
@@ -26,7 +27,15 @@ func (m *coordinatorMockRepo) GetRideByID(id uuid.UUID) (*models.Ride, error) {
 	return r, nil
 }
 
-func (m *coordinatorMockRepo) DecrementSeat(rideID, segmentID uuid.UUID) error {
+func (m *coordinatorMockRepo) DecrementSeatIdempotent(rideID, segmentID uuid.UUID, txID string) error {
+	key := ""
+	if txID != "" {
+		key = txID + ":" + segmentID.String()
+		if m.appliedTx[key] {
+			return nil
+		}
+	}
+
 	r, exists := m.rides[rideID]
 	if !exists {
 		return errors.New("ride not found")
@@ -37,10 +46,27 @@ func (m *coordinatorMockRepo) DecrementSeat(rideID, segmentID uuid.UUID) error {
 				return errors.New("no seats")
 			}
 			r.Segments[i].AvailableSeats--
+			if key != "" {
+				if m.appliedTx == nil {
+					m.appliedTx = make(map[string]bool)
+				}
+				m.appliedTx[key] = true
+			}
 			return nil
 		}
 	}
 	return errors.New("segment not found")
+}
+
+func (m *coordinatorMockRepo) DecrementSeat(rideID, segmentID uuid.UUID) error {
+	return m.DecrementSeatIdempotent(rideID, segmentID, "")
+}
+
+func (m *coordinatorMockRepo) IsTxApplied(txID string, segmentID uuid.UUID) bool {
+	if txID == "" || m.appliedTx == nil {
+		return false
+	}
+	return m.appliedTx[txID+":"+segmentID.String()]
 }
 
 func (m *coordinatorMockRepo) IncrementSeat(rideID, segmentID uuid.UUID) error {
@@ -68,7 +94,10 @@ func setupCoordinator(t *testing.T, companyID string, peers []Peer) (*Coordinato
 	}
 	t.Cleanup(func() { wal.Close() })
 	lockStore := NewLockStore(5 * time.Second)
-	repo := &coordinatorMockRepo{rides: make(map[uuid.UUID]*models.Ride)}
+	repo := &coordinatorMockRepo{
+		rides:     make(map[uuid.UUID]*models.Ride),
+		appliedTx: make(map[string]bool),
+	}
 
 	coord := NewCoordinator(companyID, clock, peerReg, wal, lockStore, repo, 1*time.Second)
 	return coord, repo, lockStore, wal
@@ -148,6 +177,7 @@ func TestCoordinatorDistributedItinerarySuccess(t *testing.T) {
 	// Ajusta o ID do teste para bater com a rota mock
 	remoteSegUUID := uuid.New()
 	segments[1].SegmentID = remoteSegUUID
+
 	// Cria servidor remoto que aceita qualquer UUID de segmento
 	dynamicServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

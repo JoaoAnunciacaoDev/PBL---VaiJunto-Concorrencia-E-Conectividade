@@ -19,6 +19,8 @@ type CoordinatorRepo interface {
 	GetRideByID(id uuid.UUID) (*models.Ride, error)
 	DecrementSeat(rideID, segmentID uuid.UUID) error
 	IncrementSeat(rideID, segmentID uuid.UUID) error
+	DecrementSeatIdempotent(rideID, segmentID uuid.UUID, txID string) error
+	IsTxApplied(txID string, segmentID uuid.UUID) bool
 }
 
 // Coordinator orquestra a confirmação de itinerários multitrecho via Two-Phase Commit (2PC).
@@ -76,21 +78,30 @@ func (c *Coordinator) ConfirmItinerary(passengerID uuid.UUID, segments []models.
 	lamport := c.clock.Tick()
 
 	segmentIDStrings := make([]string, 0, len(segments))
+	walSegments := make([]WALSegment, 0, len(segments))
 	for _, s := range segments {
 		segmentIDStrings = append(segmentIDStrings, s.SegmentID.String())
+		walSegments = append(walSegments, WALSegment{
+			SegmentID: s.SegmentID,
+			RideID:    s.RideID,
+			CompanyID: s.CompanyID,
+		})
 	}
 
 	log.Printf("[coordinator] iniciando 2PC tx_id=%s trechos=%d lamport=%d", txID, len(segments), lamport)
 
-	// Anota o início da transação no WAL
-	_ = c.wal.Append(WALEntry{
+	// Anota o início da transação no WAL com metadados completos dos trechos
+	if err := c.wal.Append(WALEntry{
 		TxID:          txID,
 		Role:          "coordinator",
 		Status:        TxPrepared,
 		CoordinatorID: c.companyID,
 		SegmentIDs:    segmentIDStrings,
+		Segments:      walSegments,
 		UpdatedAt:     time.Now(),
-	})
+	}); err != nil {
+		return fmt.Errorf("falha ao persistir início da transação no WAL: %w", err)
+	}
 
 	// FASE 1: PREPARE
 	var preparedSegments []models.ReservedSegment
@@ -110,28 +121,31 @@ func (c *Coordinator) ConfirmItinerary(passengerID uuid.UUID, segments []models.
 		log.Printf("[coordinator] falha no PREPARE da tx_id=%s: %v. Abortando trechos preparados...", txID, prepareError)
 		c.abortPreparedSegments(txID, preparedSegments)
 
-		_ = c.wal.Append(WALEntry{
+		if err := c.wal.Append(WALEntry{
 			TxID:          txID,
 			Role:          "coordinator",
 			Status:        TxAborted,
 			CoordinatorID: c.companyID,
 			SegmentIDs:    segmentIDStrings,
+			Segments:      walSegments,
 			UpdatedAt:     time.Now(),
-		})
+		}); err != nil {
+			log.Printf("[coordinator] erro ao persistir ABORTED no WAL tx_id=%s: %v", txID, err)
+		}
 
 		return prepareError
 	}
 
-
 	// DECISÃO DE COMMIT (Ponto de Não-Retorno)
-	// O coordenador grava a decisão COMMIT de forma persistente no WAL antes de enviar
-	// qualquer mensagem de confirmação para os participantes.
+	// O coordenador grava a decisão COMMIT de forma persistente no WAL com metadados completos
+	// antes de enviar qualquer mensagem de confirmação para os participantes.
 	if err := c.wal.Append(WALEntry{
 		TxID:          txID,
 		Role:          "coordinator",
 		Status:        TxCommitted,
 		CoordinatorID: c.companyID,
 		SegmentIDs:    segmentIDStrings,
+		Segments:      walSegments,
 		UpdatedAt:     time.Now(),
 	}); err != nil {
 		// Falha de disco catastrófica antes de decidir commit: aborta
@@ -191,6 +205,9 @@ func (c *Coordinator) prepareSegment(txID string, lamport uint64, passengerID uu
 		if err != nil || !acquired {
 			return prepareResult{segment: segment, ok: false, reason: "conflito de lock concorrente no trecho local"}
 		}
+
+		// Marca lock como preparado localmente
+		c.lockStore.MarkPrepared(segment.SegmentID.String(), txID)
 
 		return prepareResult{segment: segment, ok: true}
 	}
@@ -277,11 +294,7 @@ func (c *Coordinator) abortPreparedSegments(txID string, segments []models.Reser
 
 func (c *Coordinator) commitSegment(txID string, segment models.ReservedSegment) error {
 	if segment.CompanyID == c.companyID {
-		lock, hasLock := c.lockStore.Get(segment.SegmentID.String())
-		if !hasLock || lock.TxID != txID {
-			return fmt.Errorf("lock local expirado ou desalojado para tx_id=%s", txID)
-		}
-		if err := c.repo.DecrementSeat(segment.RideID, segment.SegmentID); err != nil {
+		if err := c.repo.DecrementSeatIdempotent(segment.RideID, segment.SegmentID, txID); err != nil {
 			c.lockStore.Release(segment.SegmentID.String(), txID)
 			return err
 		}
@@ -335,6 +348,8 @@ func (c *Coordinator) commitSegment(txID string, segment models.ReservedSegment)
 
 // RecoverPendingCommits varre o WAL na inicialização do servidor e retransmite
 // confirmações para quaisquer transações decididas com COMMITTED antes de uma eventual queda.
+// Cada trecho é enviado exclusivamente à empresa proprietária acompanhado do respectivo ride_id,
+// e trechos locais da empresa coordenadora são efetivados diretamente no repositório de forma idempotente.
 func (c *Coordinator) RecoverPendingCommits() {
 	entries, err := c.wal.ReadAll()
 	if err != nil {
@@ -345,20 +360,38 @@ func (c *Coordinator) RecoverPendingCommits() {
 	for _, entry := range entries {
 		if entry.Role == "coordinator" && entry.Status == TxCommitted {
 			log.Printf("[coordinator] recuperando transação COMMITTED pendente tx_id=%s", entry.TxID)
-			// Para cada segmento remoto da entrada, tenta reenviar commit
-			for _, peer := range c.peers.All() {
-				for _, segID := range entry.SegmentIDs {
-					url := fmt.Sprintf("%s/internal/v1/segments/%s/commit", peer.InternalURL, segID)
-					reqBody, _ := json.Marshal(map[string]any{
-						"tx_id":                  entry.TxID,
-						"coordinator_company_id": c.companyID,
-					})
-					req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
-					if err == nil {
-						req.Header.Set("Content-Type", "application/json")
-						resp, err := c.httpClient.Do(req)
+
+			if len(entry.Segments) > 0 {
+				for _, seg := range entry.Segments {
+					if seg.CompanyID == c.companyID {
+						// 1. Trecho local do coordenador: efetivação no próprio repositório
+						if err := c.repo.DecrementSeatIdempotent(seg.RideID, seg.SegmentID, entry.TxID); err != nil {
+							log.Printf("[coordinator] recovery trecho local seg=%s tx_id=%s: %v", seg.SegmentID, entry.TxID, err)
+						}
+						c.lockStore.Release(seg.SegmentID.String(), entry.TxID)
+					} else {
+						// 2. Trecho remoto: encaminhamento exclusivo ao peer proprietário contendo o ride_id
+						peer, exists := c.peers.Get(seg.CompanyID)
+						if !exists {
+							log.Printf("[coordinator] peer %s não encontrado para recovery seg=%s tx_id=%s", seg.CompanyID, seg.SegmentID, entry.TxID)
+							continue
+						}
+
+						url := fmt.Sprintf("%s/internal/v1/segments/%s/commit", peer.InternalURL, seg.SegmentID)
+						reqBody, _ := json.Marshal(map[string]any{
+							"tx_id":                  entry.TxID,
+							"coordinator_company_id": c.companyID,
+							"ride_id":                seg.RideID,
+						})
+						req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqBody))
 						if err == nil {
-							resp.Body.Close()
+							req.Header.Set("Content-Type", "application/json")
+							resp, err := c.httpClient.Do(req)
+							if err == nil {
+								resp.Body.Close()
+							} else {
+								log.Printf("[coordinator] recovery peer %s falhou na conexão: %v", seg.CompanyID, err)
+							}
 						}
 					}
 				}

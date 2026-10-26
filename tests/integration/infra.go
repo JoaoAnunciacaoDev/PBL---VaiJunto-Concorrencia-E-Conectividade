@@ -180,11 +180,24 @@ func (c *TestCluster) RestartNode(companyID string) *TestNode {
 		c.t.Fatalf("[%s] nó não encontrado no cluster", companyID)
 	}
 
+	// Inicializa com os peers já conhecidos para que RecoverPendingCommits funcione no Start()
+	peers := make([]consortium.Peer, 0)
+	for peerID, peerNode := range c.Nodes {
+		if companyID == peerID {
+			continue
+		}
+		peers = append(peers, consortium.Peer{
+			CompanyID:   peerID,
+			InternalURL: "http://" + peerNode.Server.HTTPAddr(),
+		})
+	}
+
 	srv, err := server.NewServerWithConfig(server.ServerConfig{
 		CompanyID:   companyID,
 		TCPAddr:     "127.0.0.1:0",
 		HTTPAddr:    "127.0.0.1:0",
 		UsersPath:   oldNode.UsersPath,
+		Peers:       peers,
 		LockTTL:     oldNode.LockTTL,
 		HTTPTimeout: 2 * time.Second,
 	})
@@ -213,15 +226,11 @@ func (c *TestCluster) RestartNode(companyID string) *TestNode {
 	}
 	c.Nodes[companyID] = newNode
 
-	// Reconecta peers
+	// Atualiza os outros peers para apontar para o novo endereço deste nó reiniciado
 	for peerID, peerNode := range c.Nodes {
 		if companyID == peerID {
 			continue
 		}
-		newNode.Server.Peers().Add(consortium.Peer{
-			CompanyID:   peerID,
-			InternalURL: "http://" + peerNode.Server.HTTPAddr(),
-		})
 		peerNode.Server.Peers().Add(consortium.Peer{
 			CompanyID:   companyID,
 			InternalURL: "http://" + newNode.Server.HTTPAddr(),

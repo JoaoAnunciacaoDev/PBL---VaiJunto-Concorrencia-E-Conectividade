@@ -143,7 +143,7 @@ func (s *HTTPServer) handlePrepare(c *gin.Context) {
 		return
 	}
 
-	// Se desbancou uma transação anterior perdedora, anota o abort no WAL
+	// Se desbancou uma transação anterior perdedora (não preparada), anota o abort no WAL
 	if evictedTxID != "" {
 		log.Printf("[httpapi] transação %s desalojada por prioridade lógica superior de %s", evictedTxID, req.TxID)
 		_ = s.wal.Append(consortium.WALEntry{
@@ -166,18 +166,32 @@ func (s *HTTPServer) handlePrepare(c *gin.Context) {
 		return
 	}
 
-	// 4. Salva o mapeamento temporário para o commit
+	// 4. Marca o lock como PREPARADO na memória para impedir desalojamentos e expiração por TTL
+	s.lockStore.MarkPrepared(segmentIDParam, req.TxID)
+
+	// 5. Salva o mapeamento temporário para o commit
 	setTxRide(segmentIDParam, req.TxID, req.RideID)
 
-	// 5. Registra o PREPARE de forma durável no Write-Ahead Log
-	_ = s.wal.Append(consortium.WALEntry{
+	// 6. Registra o PREPARE de forma durável no Write-Ahead Log
+	// Se a escrita no disco falhar, o voto afirmativo NÃO PODE ser emitido!
+	if err := s.wal.Append(consortium.WALEntry{
 		TxID:          req.TxID,
 		Role:          "participant",
 		Status:        consortium.TxPrepared,
 		CoordinatorID: req.CoordinatorCompanyID,
 		SegmentIDs:    []string{segmentIDParam},
 		UpdatedAt:     time.Now(),
-	})
+	}); err != nil {
+		log.Printf("[httpapi] falha crítica ao registrar PREPARED no WAL tx_id=%s: %v", req.TxID, err)
+		s.lockStore.Release(segmentIDParam, req.TxID)
+		deleteTxRide(segmentIDParam, req.TxID)
+		c.JSON(http.StatusInternalServerError, PrepareResponse{
+			OK:           false,
+			LamportClock: currentClock,
+			Reason:       "wal_write_failed",
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, PrepareResponse{
 		OK:           true,
@@ -201,32 +215,73 @@ func (s *HTTPServer) handleCommit(c *gin.Context) {
 
 	s.clock.Tick()
 
-	// 1. Verifica se há lock ativo para este segmento pertencente a esta transação
-	lock, hasLock := s.lockStore.Get(segmentIDParam)
-	if !hasLock || lock.TxID != req.TxID {
-		// Se não tem lock ativo, pode ter expirado ou já ter sido comitado
-		// Para garantir idempotência, se o WAL já registra COMMITTED, retorna OK
-		entries, _ := s.wal.ReadAll()
-		for _, e := range entries {
-			if e.TxID == req.TxID && e.Status == consortium.TxCommitted {
-				c.JSON(http.StatusOK, CommitResponse{OK: true})
-				return
-			}
-		}
+	// 1. Consulta o estado da transação no WAL segundo a máquina de estados
+	txState, _, err := s.wal.GetTxState(req.TxID)
+	if err != nil {
+		log.Printf("[httpapi] erro ao consultar estado no WAL tx_id=%s: %v", req.TxID, err)
+		c.JSON(http.StatusInternalServerError, CommitResponse{OK: false, Reason: "wal_read_error"})
+		return
+	}
 
-		c.JSON(http.StatusGone, CommitResponse{
+	if txState == consortium.TxAborted {
+		c.JSON(http.StatusConflict, CommitResponse{
 			OK:     false,
-			Reason: "lock_expired",
+			Reason: "transaction_aborted",
 		})
 		return
 	}
 
-	// 2. Determina a carona a ter o assento decrementado
+	// 2. Determina a carona
 	rideID := req.RideID
 	if rideID == uuid.Nil {
 		if mappedRideID, exists := getTxRide(segmentIDParam, req.TxID); exists {
 			rideID = mappedRideID
 		}
+	}
+	if rideID == uuid.Nil {
+		// Tenta encontrar a carona pelo segmento se não veio na requisição
+		if r, err := s.repo.GetRideBySegmentID(segmentID); err == nil {
+			rideID = r.ID
+		}
+	}
+
+	// 3. Se o WAL já contém COMMITTED (decisão tomada anteriormente):
+	if txState == consortium.TxCommitted {
+		// CONDIÇÃO ESSENCIAL: nunca responder sucesso sem verificar e garantir que o efeito foi aplicado
+		if !s.repo.IsTxApplied(req.TxID, segmentID) {
+			if rideID == uuid.Nil {
+				c.JSON(http.StatusBadRequest, CommitResponse{
+					OK:     false,
+					Reason: "ride_id_not_found",
+				})
+				return
+			}
+			if err := s.repo.DecrementSeatIdempotent(rideID, segmentID, req.TxID); err != nil {
+				log.Printf("[httpapi] erro ao aplicar decremento pendente tx_id=%s: %v", req.TxID, err)
+				c.JSON(http.StatusInternalServerError, CommitResponse{
+					OK:     false,
+					Reason: err.Error(),
+				})
+				return
+			}
+		}
+
+		s.lockStore.Release(segmentIDParam, req.TxID)
+		deleteTxRide(segmentIDParam, req.TxID)
+		c.JSON(http.StatusOK, CommitResponse{OK: true})
+		return
+	}
+
+	// 4. Se não era COMMITTED, deve estar PREPARED (no WAL ou lock ativo)
+	lock, hasLock := s.lockStore.Get(segmentIDParam)
+	isPrepared := (txState == consortium.TxPrepared) || (hasLock && lock.TxID == req.TxID)
+
+	if !isPrepared {
+		c.JSON(http.StatusGone, CommitResponse{
+			OK:     false,
+			Reason: "lock_not_found",
+		})
+		return
 	}
 
 	if rideID == uuid.Nil {
@@ -237,9 +292,26 @@ func (s *HTTPServer) handleCommit(c *gin.Context) {
 		return
 	}
 
-	// 3. Decrementa o assento fisicamente no repositório persistente
-	if err := s.repo.DecrementSeat(rideID, segmentID); err != nil {
-		log.Printf("[httpapi] erro ao decrementar assento no commit: %v", err)
+	// 5. REGISTRO DURÁVEL DA DECISÃO NO WAL PRIMEIRO
+	if err := s.wal.Append(consortium.WALEntry{
+		TxID:          req.TxID,
+		Role:          "participant",
+		Status:        consortium.TxCommitted,
+		CoordinatorID: req.CoordinatorCompanyID,
+		SegmentIDs:    []string{segmentIDParam},
+		UpdatedAt:     time.Now(),
+	}); err != nil {
+		log.Printf("[httpapi] erro ao gravar COMMITTED no WAL tx_id=%s: %v", req.TxID, err)
+		c.JSON(http.StatusInternalServerError, CommitResponse{
+			OK:     false,
+			Reason: "wal_write_failed",
+		})
+		return
+	}
+
+	// 6. APLICAÇÃO EFETIVA DO EFEITO NO REPOSITÓRIO (IDEMPOTENTE)
+	if err := s.repo.DecrementSeatIdempotent(rideID, segmentID, req.TxID); err != nil {
+		log.Printf("[httpapi] erro ao decrementar assento no commit tx_id=%s: %v", req.TxID, err)
 		c.JSON(http.StatusInternalServerError, CommitResponse{
 			OK:     false,
 			Reason: err.Error(),
@@ -247,19 +319,9 @@ func (s *HTTPServer) handleCommit(c *gin.Context) {
 		return
 	}
 
-	// 4. Libera o lock de pré-reserva
+	// 7. Libera o lock de pré-reserva e limpa mapeamentos em memória
 	s.lockStore.Release(segmentIDParam, req.TxID)
 	deleteTxRide(segmentIDParam, req.TxID)
-
-	// 5. Registra o COMMIT definitivo no WAL
-	_ = s.wal.Append(consortium.WALEntry{
-		TxID:          req.TxID,
-		Role:          "participant",
-		Status:        consortium.TxCommitted,
-		CoordinatorID: req.CoordinatorCompanyID,
-		SegmentIDs:    []string{segmentIDParam},
-		UpdatedAt:     time.Now(),
-	})
 
 	c.JSON(http.StatusOK, CommitResponse{OK: true})
 }
@@ -275,19 +337,45 @@ func (s *HTTPServer) handleAbort(c *gin.Context) {
 
 	s.clock.Tick()
 
-	// Libera lock se ainda estiver ativo para esse txID
+	// 1. Consulta o estado da transação no WAL
+	txState, _, err := s.wal.GetTxState(req.TxID)
+	if err != nil {
+		log.Printf("[httpapi] erro ao consultar WAL no abort tx_id=%s: %v", req.TxID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "wal_read_error"})
+		return
+	}
+
+	// 2. Se a transação já foi confirmada com COMMITTED, a decisão de commit PREVALECE!
+	// Mensagem de abort tardia não reverte assento nem altera o estado consolidado.
+	if txState == consortium.TxCommitted {
+		log.Printf("[httpapi] abort tardio ignorado para transação já confirmada com COMMIT tx_id=%s", req.TxID)
+		c.JSON(http.StatusOK, AbortResponse{OK: true})
+		return
+	}
+
+	// 3. Se já estava ABORTED, resposta idempotente
+	if txState == consortium.TxAborted {
+		c.JSON(http.StatusOK, AbortResponse{OK: true})
+		return
+	}
+
+	// 4. Libera lock se ainda estiver ativo para esse txID
 	s.lockStore.Release(segmentIDParam, req.TxID)
 	deleteTxRide(segmentIDParam, req.TxID)
 
-	// Registra o abort no WAL
-	_ = s.wal.Append(consortium.WALEntry{
+	// 5. Registra o abort no WAL tratando possíveis falhas de escrita
+	if err := s.wal.Append(consortium.WALEntry{
 		TxID:          req.TxID,
 		Role:          "participant",
 		Status:        consortium.TxAborted,
 		CoordinatorID: req.CoordinatorCompanyID,
 		SegmentIDs:    []string{segmentIDParam},
 		UpdatedAt:     time.Now(),
-	})
+	}); err != nil {
+		log.Printf("[httpapi] falha ao registrar ABORTED no WAL tx_id=%s: %v", req.TxID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "wal_write_failed"})
+		return
+	}
 
 	c.JSON(http.StatusOK, AbortResponse{OK: true})
 }
@@ -305,16 +393,14 @@ func (s *HTTPServer) handleStatus(c *gin.Context) {
 		return
 	}
 
-	entries, _ := s.wal.ReadAll()
-	for i := len(entries) - 1; i >= 0; i-- {
-		if entries[i].TxID == txID {
-			c.JSON(http.StatusOK, StatusResponse{
-				TxID:      txID,
-				SegmentID: segmentIDParam,
-				Status:    string(entries[i].Status),
-			})
-			return
-		}
+	txState, _, err := s.wal.GetTxState(txID)
+	if err == nil && txState != "" {
+		c.JSON(http.StatusOK, StatusResponse{
+			TxID:      txID,
+			SegmentID: segmentIDParam,
+			Status:    string(txState),
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, StatusResponse{

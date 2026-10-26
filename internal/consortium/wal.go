@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type TxStatus string
@@ -21,14 +23,22 @@ const (
 	TxExpired   TxStatus = "EXPIRED"   // lock expirou por tempo limite (TTL)
 )
 
+// WALSegment armazena os metadados completos de cada trecho para recuperação precisa e idempotente.
+type WALSegment struct {
+	SegmentID uuid.UUID `json:"segment_id"`
+	RideID    uuid.UUID `json:"ride_id"`
+	CompanyID string    `json:"company_id"`
+}
+
 // WALEntry representa uma entrada gravada no log de transações.
 type WALEntry struct {
-	TxID          string    `json:"tx_id"`
-	Role          string    `json:"role"` // coordinator ou participant
-	Status        TxStatus  `json:"status"`
-	CoordinatorID string    `json:"coordinator_id"`
-	SegmentIDs    []string  `json:"segment_ids,omitempty"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	TxID          string       `json:"tx_id"`
+	Role          string       `json:"role"` // coordinator ou participant
+	Status        TxStatus     `json:"status"`
+	CoordinatorID string       `json:"coordinator_id"`
+	SegmentIDs    []string     `json:"segment_ids,omitempty"`
+	Segments      []WALSegment `json:"segments,omitempty"`
+	UpdatedAt     time.Time    `json:"updated_at"`
 }
 
 // WAL implementa um Write-Ahead Log seguro e persistente.
@@ -125,6 +135,49 @@ func (w *WAL) ReadAll() ([]WALEntry, error) {
 	}
 
 	return entries, nil
+}
+
+// GetTxState retorna o estado consolidado de uma transação com base na máquina de estados de 2PC:
+// - Se houver qualquer registro COMMITTED, o estado consolidado é COMMITTED (imutável).
+// - Se houver ABORTED (e nenhum COMMITTED), o estado é ABORTED.
+// - Se houver PREPARED (e nenhum COMMITTED ou ABORTED), o estado é PREPARED.
+// - Se não houver registros, retorna "" (vazio).
+func (w *WAL) GetTxState(txID string) (TxStatus, []WALEntry, error) {
+	entries, err := w.ReadAll()
+	if err != nil {
+		return "", nil, err
+	}
+
+	var matching []WALEntry
+	hasCommitted := false
+	hasAborted := false
+	hasPrepared := false
+
+	for _, entry := range entries {
+		if entry.TxID == txID {
+			matching = append(matching, entry)
+			switch entry.Status {
+			case TxCommitted:
+				hasCommitted = true
+			case TxAborted:
+				hasAborted = true
+			case TxPrepared:
+				hasPrepared = true
+			}
+		}
+	}
+
+	if hasCommitted {
+		return TxCommitted, matching, nil
+	}
+	if hasAborted {
+		return TxAborted, matching, nil
+	}
+	if hasPrepared {
+		return TxPrepared, matching, nil
+	}
+
+	return "", matching, nil
 }
 
 // Close fecha o descritor de arquivo aberto.

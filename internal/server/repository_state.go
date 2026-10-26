@@ -16,11 +16,12 @@ const persistentStateVersion = 1
 // atômica. Uma reserva confirmada e os assentos correspondentes passam a ser
 // gravados no mesmo arquivo e no mesmo rename.
 type PersistentState struct {
-	Version      int                  `json:"version"`
-	Users        []storedUser         `json:"users"`
-	Drivers      []storedDriver       `json:"drivers"`
-	Rides        []models.Ride        `json:"rides"`
-	Reservations []models.Reservation `json:"reservations"`
+	Version             int                  `json:"version"`
+	Users               []storedUser         `json:"users"`
+	Drivers             []storedDriver       `json:"drivers"`
+	Rides               []models.Ride        `json:"rides"`
+	Reservations        []models.Reservation `json:"reservations"`
+	AppliedTransactions []string             `json:"applied_transactions,omitempty"`
 }
 
 func (r *Repository) saveStateLocked() error {
@@ -66,6 +67,12 @@ func (r *Repository) persistentStateLocked() PersistentState {
 	sort.Slice(state.Reservations, func(i, j int) bool {
 		return state.Reservations[i].CreatedAt.Before(state.Reservations[j].CreatedAt)
 	})
+
+	state.AppliedTransactions = make([]string, 0, len(r.appliedTx))
+	for key := range r.appliedTx {
+		state.AppliedTransactions = append(state.AppliedTransactions, key)
+	}
+	sort.Strings(state.AppliedTransactions)
 
 	return state
 }
@@ -131,6 +138,10 @@ func (r *Repository) loadPersistentState() error {
 			return errors.New("estado contém reservas duplicadas")
 		}
 		r.reservations[reservation.ID] = cloneReservation(&reservation)
+	}
+
+	for _, txKey := range state.AppliedTransactions {
+		r.appliedTx[txKey] = true
 	}
 
 	return nil

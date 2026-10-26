@@ -17,10 +17,17 @@ type SegmentLock struct {
 	CoordinatorID string    `json:"coordinator_id"`
 	LamportClock  uint64    `json:"lamport_clock"`
 	ExpiresAt     time.Time `json:"expires_at"`
+	IsPrepared    bool      `json:"is_prepared"` // Indica se a transação completou a fase PREPARE
 }
 
 // IsExpired verifica se o lock ultrapassou sua data limite.
+// Locks com IsPrepared == true NÃO expiram por tempo decorrido,
+// pois representam um compromisso de 2PC que só pode ser resolvido
+// por uma decisão durável (COMMIT ou ABORT).
 func (l *SegmentLock) IsExpired(now time.Time) bool {
+	if l.IsPrepared {
+		return false
+	}
 	return !l.ExpiresAt.After(now)
 }
 
@@ -81,26 +88,49 @@ func (s *LockStore) TryAcquire(segmentID string, lock SegmentLock) (bool, string
 		return true, "", nil
 	}
 
+	// Mesma transação renovando ou retransmitindo
 	if current.TxID == lock.TxID {
 		if lock.ExpiresAt.After(current.ExpiresAt) {
+			lock.IsPrepared = current.IsPrepared
 			s.locks[segmentID] = lock
 		}
 		return true, "", nil
 	}
 
-	if isBetterPriority(
-		lock.LamportClock, 
-		lock.CoordinatorID, 
-		current.LamportClock, 
-		current.CoordinatorID,
-		) {
+	// Se o lock atual pertence a uma transação já PREPARADA, ela NUNCA pode ser desalojada!
+	// O protocolo 2PC exige que o recurso permaneça garantido até decisão final.
+	if current.IsPrepared {
+		return false, "", nil
+	}
 
+	// Transação concorrente ainda não preparada: desempata por prioridade lógica de Lamport
+	if isBetterPriority(
+		lock.LamportClock,
+		lock.CoordinatorID,
+		current.LamportClock,
+		current.CoordinatorID,
+	) {
 		evictedTxID := current.TxID
 		s.locks[segmentID] = lock
 		return true, evictedTxID, nil
 	}
 
 	return false, "", nil
+}
+
+// MarkPrepared marca o lock de um segmento como formalmente preparado após voto 2PC afirmativo.
+func (s *LockStore) MarkPrepared(segmentID, txID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	current, exists := s.locks[segmentID]
+	if !exists || current.TxID != txID {
+		return false
+	}
+
+	current.IsPrepared = true
+	s.locks[segmentID] = current
+	return true
 }
 
 // Get retorna uma cópia do lock atual para consulta.
@@ -137,7 +167,7 @@ func (s *LockStore) Release(segmentID, txID string) bool {
 	return false
 }
 
-// ExpireAll varre todos os locks e remove aqueles cujo TTL venceu.
+// ExpireAll varre todos os locks e remove aqueles cujo TTL venceu (exceto os preparados).
 func (s *LockStore) ExpireAll() []ExpiredLock {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -146,6 +176,11 @@ func (s *LockStore) ExpireAll() []ExpiredLock {
 	var expired []ExpiredLock
 
 	for segmentID, lock := range s.locks {
+		// Locks preparados jamais são expirados por passagem de tempo
+		if lock.IsPrepared {
+			continue
+		}
+
 		if lock.IsExpired(now) {
 			expired = append(expired, ExpiredLock{
 				SegmentID: segmentID,
