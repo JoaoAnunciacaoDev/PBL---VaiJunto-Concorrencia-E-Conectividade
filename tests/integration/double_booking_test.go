@@ -119,15 +119,14 @@ func TestNoDoubleSeatBooking(t *testing.T) {
 		t.Fatalf("esperado exatamente 20 rejeições de concorrência, obtido %d", failures)
 	}
 
-	// Consulta o estado no repositório dono do assento (empresa-a)
-	confirmedPassengers, err := cluster.Nodes["empresa-a"].Server.Repository().GetConfirmedPassengerIDsByRideID(ride.ID)
-	if err != nil {
-		t.Fatalf("erro ao consultar passageiros confirmados: %v", err)
+	// Consulta o estado no cluster para confirmar que exatamente 1 passageiro possui a reserva
+	totalConfirmed := 0
+	for _, node := range cluster.Nodes {
+		totalConfirmed += node.Server.Repository().CountConfirmedReservationsForSegment(targetSegment.ID)
 	}
 
-	passengersOnSeg := confirmedPassengers[targetSegment.ID]
-	if len(passengersOnSeg) != 1 {
-		t.Fatalf("CORRUPÇÃO: trecho possui %d passageiros confirmados, esperado exatamente 1", len(passengersOnSeg))
+	if totalConfirmed != 1 {
+		t.Fatalf("CORRUPÇÃO: trecho possui %d reservas confirmadas no consórcio, esperado exatamente 1", totalConfirmed)
 	}
 
 	// Verifica que o assento restante é 0

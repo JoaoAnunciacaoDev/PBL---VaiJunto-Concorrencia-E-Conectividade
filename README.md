@@ -8,7 +8,7 @@ A consistência e a atomicidade das reservas entre os múltiplos servidores são
 
 ---
 
-## 🏛️ Arquitetura Distribuída
+## Arquitetura Distribuída
 
 Cada empresa do consórcio executa uma instância completa e isolada do servidor, possuindo:
 1. **Porta TCP (ex: :8080):** Atendimento a clientes de terminal (passageiros e motoristas) via mensagens JSON delimitadas por quebra de linha.
@@ -32,7 +32,7 @@ Cada empresa do consórcio executa uma instância completa e isolada do servidor
 
 ---
 
-## 📁 Estrutura do Projeto
+## Estrutura do Projeto
 
 ```text
 .
@@ -72,7 +72,7 @@ Cada empresa do consórcio executa uma instância completa e isolada do servidor
 
 ---
 
-## ⚙️ Pré-requisitos
+## Pré-requisitos
 
 - **Go 1.27** ou superior instalado (`go version`)
 - **Docker e Docker Compose** (opcional, para execução em contêineres)
@@ -80,24 +80,25 @@ Cada empresa do consórcio executa uma instância completa e isolada do servidor
 
 ---
 
-## 🚀 Como Executar
+## Como Executar
 
 ### Cenário 1: Execução Local Rápida via Docker Compose (Mesma Máquina)
 
-O `docker-compose.yaml` sobe o consórcio com as 3 empresas em contêineres isolados, cada um com volume de disco próprio:
+O `docker-compose.yaml` orquestra o consórcio com as 3 empresas em contêineres isolados, cada um com volume de disco próprio, e roda automaticamente o serviço de `seed` assim que todos estiverem saudáveis:
 
 ```bash
-# 1. Constrói as imagens e sobe as 3 empresas em segundo plano
+# 1. Constrói as imagens, sobe as 3 empresas e executa o seed multiconsórcio automaticamente
 docker compose -f docker/docker-compose.yaml up -d --build
 
-# 2. Povoa a Empresa A com caronas de demonstração
-docker compose -f docker/docker-compose.yaml run --rm seed
+# 2. (Opcional) Acompanhar o log do seed que populou as 3 empresas:
+docker compose -f docker/docker-compose.yaml logs -f seed
 
 # 3. Abre um cliente interativo de terminal conectado à Empresa A
 docker compose -f docker/docker-compose.yaml run --rm client
 
-# Para conectar o cliente na Empresa B:
+# Para conectar o cliente na Empresa B ou C:
 docker compose -f docker/docker-compose.yaml run --rm -e VAIJUNTO_SERVER_ADDR=empresa-b:8080 client
+docker compose -f docker/docker-compose.yaml run --rm -e VAIJUNTO_SERVER_ADDR=empresa-c:8080 client
 ```
 
 Portas publicadas na máquina host:
@@ -112,6 +113,32 @@ docker compose -f docker/docker-compose.yaml down
 
 ---
 
+### Dados de Teste Pré-configurados (Seed)
+
+O `cmd/seed` popula as 3 empresas de forma orquestrada com dados desenhados para demonstrar o consórcio:
+
+1. **Rotas Concorrentes (`Feira de Santana -> Salvador`):**
+   - **Empresa A** (Motorista Ana): R$ 35,00
+   - **Empresa B** (Motorista Bruno): R$ 30,00
+   - **Empresa C** (Motorista Carlos): R$ 25,00
+   - *Demonstração:* Uma única busca por `Feira de Santana -> Salvador` retorna as 3 opções do consórcio com preços e motoristas concorrentes.
+
+2. **Rotas Complementares / Multitrecho (Two-Phase Commit):**
+   - **Empresa A** (Ana): `Salvador -> Feira de Santana -> Alagoinhas`
+   - **Empresa B** (Bruno): `Feira de Santana -> Lençóis`
+   - **Empresa C** (Carlos): `Lençóis -> Vitória da Conquista`
+   - *Cenário 2PC (2 empresas):* Buscar `Salvador -> Lençóis` (reserva atômica entre A e B).
+   - *Cenário 2PC (3 empresas):* Buscar `Salvador -> Vitória da Conquista` (reserva atômica triangular entre A, B e C).
+
+3. **Usuários e Senhas Pré-cadastrados (senha padrão: `123456`):**
+   | Empresa | Passageiro | Motorista |
+   |---|---|---|
+   | **Empresa A** | `alice` | `ana` |
+   | **Empresa B** | `beto` | `bruno` |
+   | **Empresa C** | `carla` | `carlos` |
+
+---
+
 ### Cenário 2: Execução em 3 Computadores Físicos Distintos (Apresentação)
 
 Na apresentação com 3 computadores na mesma rede Wi-Fi ou cabo de rede local (LAN):
@@ -123,17 +150,17 @@ Na apresentação com 3 computadores na mesma rede Wi-Fi ou cabo de rede local (
 
 #### Opção A: Executando Diretamente com Go Nativo
 
-**💻 No Computador 1 (Empresa A):**
+**No Computador 1 (Empresa A):**
 ```bash
 go run ./cmd/api-server -company-id empresa-a -tcp-addr 0.0.0.0:8080 -http-addr 0.0.0.0:8081 -peers "empresa-b=http://192.168.1.20:8081,empresa-c=http://192.168.1.30:8081"
 ```
 
-**💻 No Computador 2 (Empresa B):**
+**No Computador 2 (Empresa B):**
 ```bash
 go run ./cmd/api-server -company-id empresa-b -tcp-addr 0.0.0.0:8080 -http-addr 0.0.0.0:8081 -peers "empresa-a=http://192.168.1.10:8081,empresa-c=http://192.168.1.30:8081"
 ```
 
-**💻 No Computador 3 (Empresa C):**
+**No Computador 3 (Empresa C):**
 ```bash
 go run ./cmd/api-server -company-id empresa-c -tcp-addr 0.0.0.0:8080 -http-addr 0.0.0.0:8081 -peers "empresa-a=http://192.168.1.10:8081,empresa-b=http://192.168.1.20:8081"
 ```
@@ -147,19 +174,29 @@ docker build -t vaijunto:local -f docker/Dockerfile .
 
 Em seguida, suba o contêiner em cada máquina:
 
-**💻 No Computador 1 (Empresa A):**
+**No Computador 1 (Empresa A):**
 ```bash
 docker run --name empresa-a --rm -p 8080:8080 -p 8081:8081 vaijunto:local /app/bin/api-server -company-id empresa-a -tcp-addr :8080 -http-addr :8081 -peers "empresa-b=http://192.168.1.20:8081,empresa-c=http://192.168.1.30:8081"
 ```
 
-**💻 No Computador 2 (Empresa B):**
+**No Computador 2 (Empresa B):**
 ```bash
 docker run --name empresa-b --rm -p 8080:8080 -p 8081:8081 vaijunto:local /app/bin/api-server -company-id empresa-b -tcp-addr :8080 -http-addr :8081 -peers "empresa-a=http://192.168.1.10:8081,empresa-c=http://192.168.1.30:8081"
 ```
 
-**💻 No Computador 3 (Empresa C):**
+**No Computador 3 (Empresa C):**
 ```bash
 docker run --name empresa-c --rm -p 8080:8080 -p 8081:8081 vaijunto:local /app/bin/api-server -company-id empresa-c -tcp-addr :8080 -http-addr :8081 -peers "empresa-a=http://192.168.1.10:8081,empresa-b=http://192.168.1.20:8081"
+```
+
+---
+
+### Populando os 3 Computadores no Laboratório
+
+Após ligar os servidores nas 3 máquinas, execute o seed a partir de qualquer computador da rede:
+
+```bash
+go run ./cmd/seed -servers="empresa-a=192.168.1.10:8080,empresa-b=192.168.1.20:8080,empresa-c=192.168.1.30:8080"
 ```
 
 ---
@@ -174,11 +211,14 @@ go run ./cmd/api-client -addr 192.168.1.10:8080
 
 # Conectar como passageiro na Empresa B:
 go run ./cmd/api-client -addr 192.168.1.20:8080
+
+# Conectar como passageiro na Empresa C:
+go run ./cmd/api-client -addr 192.168.1.30:8080
 ```
 
 ---
 
-## ⚡ Simulador de Alta Carga Concorrente
+## Simulador de Alta Carga Concorrente
 
 O projeto inclui um simulador autônomo de estresse (`cmd/simulator`) que gera dezenas de passageiros simultâneos concorrendo por vagas e medindo throughput e rejeições:
 
@@ -192,7 +232,7 @@ docker compose -f docker/docker-compose.yaml run --rm simulator
 
 ---
 
-## 🧪 Testes Automatizados e Injeção de Falhas
+## Testes Automatizados e Injeção de Falhas
 
 O sistema conta com testes unitários em todos os pacotes e uma suíte completa de **testes de integração com injeção de falhas** (`tests/integration/`):
 
@@ -209,7 +249,7 @@ go test ./... -v
 
 ---
 
-## 📡 Referência da API REST Inter-Empresas (Gin)
+## Referência da API REST Inter-Empresas (Gin)
 
 | Método | Endpoint | Descrição |
 |---|---|---|
@@ -222,7 +262,7 @@ go test ./... -v
 
 ---
 
-## 🛡️ Conceitos-Chave para Apresentação
+## Conceitos-Chave para Apresentação
 
 - **Consenso sem Coordenador Fixo:** Qualquer empresa que receba o pedido do passageiro atua como coordenadora daquela transação 2PC específica.
 - **Ordem Total Determinística:** O desempate em disputas concorrentes de assentos utiliza o par `(LamportClock, CoordinatorCompanyID)`. Como o ID da empresa é uma string única, nunca há empate sem vencedor.

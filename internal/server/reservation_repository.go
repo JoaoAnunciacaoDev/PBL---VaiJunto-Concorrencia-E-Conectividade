@@ -120,6 +120,26 @@ func (r *Repository) RegisterConfirmedReservation(passengerID uuid.UUID, segment
 	return cloneReservation(reservation), nil
 }
 
+// CountConfirmedReservationsForSegment retorna o número de reservas confirmadas locais que contêm o segmento informado.
+func (r *Repository) CountConfirmedReservationsForSegment(segmentID uuid.UUID) int {
+	r.reservationsMu.RLock()
+	defer r.reservationsMu.RUnlock()
+
+	count := 0
+	for _, res := range r.reservations {
+		if res.Status != enum.Confirmada {
+			continue
+		}
+		for _, seg := range res.Segments {
+			if seg.SegmentID == segmentID {
+				count++
+				break
+			}
+		}
+	}
+	return count
+}
+
 func (r *Repository) GetReservationsByPassengerID(passengerID uuid.UUID) ([]*models.Reservation, error) {
 	r.reservationsMu.RLock()
 	defer r.reservationsMu.RUnlock()

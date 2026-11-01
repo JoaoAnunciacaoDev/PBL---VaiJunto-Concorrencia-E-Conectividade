@@ -83,9 +83,16 @@ services:
   # Carga inicial de dados de demonstração
   seed:
     image: vaijunto:local
-    command: ["/app/bin/seed", "-addr=empresa-a:8080"]
+    command: [
+      "/app/bin/seed",
+      "-servers=empresa-a=empresa-a:8080,empresa-b=empresa-b:8080,empresa-c=empresa-c:8080"
+    ]
     depends_on:
       empresa-a:
+        condition: service_healthy
+      empresa-b:
+        condition: service_healthy
+      empresa-c:
         condition: service_healthy
 
   # Simulador autônomo sob alta carga de passageiros simultâneos
