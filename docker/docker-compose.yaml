@@ -73,10 +73,13 @@ services:
 
   # Cliente de terminal para testes manuais interativos
   # Exemplo de uso: docker compose run --rm client
-  # Para conectar na empresa B: VAIJUNTO_SERVER_ADDR=empresa-b:8080 docker compose run --rm client
+  # Para conectar na empresa B: docker compose run --rm -e VAIJUNTO_SERVER_ADDR=empresa-b:8080 client
   client:
     image: vaijunto:local
-    command: ["/app/bin/api-client", "-addr=${VAIJUNTO_SERVER_ADDR:-empresa-a:8080}"]
+    profiles: ["tools"]
+    environment:
+      - VAIJUNTO_SERVER_ADDR=empresa-a:8080
+    command: ["/app/bin/api-client"]
     stdin_open: true
     tty: true
 
@@ -99,6 +102,7 @@ services:
   # Executar com: docker compose run --rm simulator
   simulator:
     image: vaijunto:local
+    profiles: ["tools"]
     command: [
       "/app/bin/simulator",
       "-companies=empresa-a=empresa-a:8080,empresa-b=empresa-b:8080,empresa-c=empresa-c:8080",

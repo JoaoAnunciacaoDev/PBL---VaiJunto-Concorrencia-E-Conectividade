@@ -12,7 +12,12 @@ import (
 
 // main é o ponto de entrada do aplicativo cliente. Ele inicia a interface de terminal para interação com o usuário.
 func main() {
-	address := flag.String("addr", "localhost:8080", "endereço TCP do servidor no formato host:porta")
+	defaultAddr := "localhost:8080"
+	if envAddr := os.Getenv("VAIJUNTO_SERVER_ADDR"); envAddr != "" {
+		defaultAddr = envAddr
+	}
+
+	address := flag.String("addr", defaultAddr, "endereço TCP do servidor no formato host:porta")
 	flag.Parse()
 
 	err := client.RunTerminal(
