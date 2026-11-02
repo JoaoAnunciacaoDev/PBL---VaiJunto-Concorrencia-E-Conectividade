@@ -81,6 +81,7 @@ func (s *HTTPServer) setupRoutes() {
 		v1.POST("/segments/:segmentID/commit", s.handleCommit)
 		v1.POST("/segments/:segmentID/abort", s.handleAbort)
 		v1.GET("/segments/:segmentID/status/:txID", s.handleStatus)
+		v1.POST("/segments/:segmentID/release", s.handleRelease)
 	}
 }
 

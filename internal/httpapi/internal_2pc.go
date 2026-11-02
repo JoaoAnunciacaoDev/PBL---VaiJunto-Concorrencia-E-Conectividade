@@ -409,3 +409,47 @@ func (s *HTTPServer) handleStatus(c *gin.Context) {
 		Status:    "NOT_FOUND",
 	})
 }
+
+// ReleaseRequest carrega os parâmetros para liberação de assento decorrente de cancelamento.
+type ReleaseRequest struct {
+	RideID               uuid.UUID `json:"ride_id"`
+	CoordinatorCompanyID string    `json:"coordinator_company_id"`
+}
+
+// ReleaseResponse responde sobre o sucesso da liberação do assento.
+type ReleaseResponse struct {
+	OK     bool   `json:"ok"`
+	Reason string `json:"reason,omitempty"`
+}
+
+func (s *HTTPServer) handleRelease(c *gin.Context) {
+	segmentIDParam := c.Param("segmentID")
+	segmentID, err := uuid.Parse(segmentIDParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ReleaseResponse{OK: false, Reason: "segment_id_invalido"})
+		return
+	}
+
+	var req ReleaseRequest
+	_ = c.ShouldBindJSON(&req)
+
+	rideID := req.RideID
+	if rideID == uuid.Nil {
+		ride, err := s.repo.GetRideBySegmentID(segmentID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, ReleaseResponse{OK: false, Reason: "carona_nao_encontrada"})
+			return
+		}
+		rideID = ride.ID
+	}
+
+	if err := s.repo.IncrementSeat(rideID, segmentID); err != nil {
+		log.Printf("[httpapi] falha ao incrementar assento no release trecho=%s: %v", segmentID, err)
+		c.JSON(http.StatusConflict, ReleaseResponse{OK: false, Reason: err.Error()})
+		return
+	}
+
+	s.clock.Tick()
+	log.Printf("[httpapi] assento do trecho %s liberado via release", segmentID)
+	c.JSON(http.StatusOK, ReleaseResponse{OK: true})
+}

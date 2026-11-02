@@ -2,6 +2,7 @@ package consortium
 
 import (
 	"bytes"
+	"strings"
 	"context"
 	"encoding/json"
 	"errors"
@@ -110,7 +111,7 @@ func (c *Coordinator) ConfirmItinerary(passengerID uuid.UUID, segments []models.
 	for _, segment := range segments {
 		res := c.prepareSegment(txID, lamport, passengerID, segment)
 		if !res.ok {
-			prepareError = fmt.Errorf("trecho %s da empresa %s indisponível: %s", segment.SegmentID, segment.CompanyID, res.reason)
+			prepareError = fmt.Errorf("trecho da empresa %s indisponível: %s", segment.CompanyID, res.reason)
 			break
 		}
 		preparedSegments = append(preparedSegments, segment)
@@ -235,7 +236,15 @@ func (c *Coordinator) prepareSegment(txID string, lamport uint64, passengerID uu
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return prepareResult{segment: segment, ok: false, reason: "timeout ou falha de conexão com servidor da empresa: " + err.Error()}
+		log.Printf("[coordinator] falha de comunicação com empresa %s no trecho %s: %v", segment.CompanyID, segment.SegmentID, err)
+		errStr := err.Error()
+		if strings.Contains(errStr, "Client.Timeout") || strings.Contains(errStr, "context deadline exceeded") {
+			return prepareResult{segment: segment, ok: false, reason: "servidor da empresa não respondeu a tempo (timeout)"}
+		}
+		if strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "connectex") {
+			return prepareResult{segment: segment, ok: false, reason: "servidor da empresa está fora do ar (conexão recusada)"}
+		}
+		return prepareResult{segment: segment, ok: false, reason: "servidor da empresa temporariamente inacessível"}
 	}
 	defer resp.Body.Close()
 

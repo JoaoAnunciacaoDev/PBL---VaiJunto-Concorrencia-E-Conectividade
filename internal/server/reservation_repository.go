@@ -203,7 +203,7 @@ func (r *Repository) GetConfirmedPassengerIDsByRideID(rideID uuid.UUID) (map[uui
 	return passengersBySegment, nil
 }
 
-func (r *Repository) CancelReservation(reservationID, passengerID uuid.UUID) error {
+func (r *Repository) CancelReservation(reservationID, passengerID uuid.UUID, companyID string) ([]models.ReservedSegment, error) {
 	r.ridesMu.Lock()
 	defer r.ridesMu.Unlock()
 
@@ -212,31 +212,42 @@ func (r *Repository) CancelReservation(reservationID, passengerID uuid.UUID) err
 
 	reservation, exists := r.reservations[reservationID]
 	if !exists {
-		return errors.New("reserva não encontrada")
+		return nil, errors.New("reserva não encontrada")
 	}
 	if reservation.PassengerID != passengerID {
-		return errors.New("passageiro não pode cancelar esta reserva")
+		return nil, errors.New("passageiro não pode cancelar esta reserva")
 	}
 	if reservation.Status != enum.Confirmada {
-		return errors.New("reserva não pode ser cancelada")
+		return nil, errors.New("reserva não pode ser cancelada")
 	}
 
-	stages, err := r.reservedStagesLocked(reservation.Segments)
-	if err != nil {
-		return fmt.Errorf("reserva possui trechos indisponíveis: %w", err)
+	var localStages []reservedStage
+	for _, segment := range reservation.Segments {
+		if companyID == "" || segment.CompanyID == "" || segment.CompanyID == companyID {
+			ride, exists := r.rides[segment.RideID]
+			if exists && !ride.Cancelled {
+				for index := range ride.Segments {
+					if ride.Segments[index].ID == segment.SegmentID {
+						localStages = append(localStages, reservedStage{stage: &ride.Segments[index]})
+						break
+					}
+				}
+			}
+		}
 	}
-	for _, stage := range stages {
+
+	for _, stage := range localStages {
 		stage.stage.AvailableSeats++
 	}
 
 	reservation.Status = enum.Cancelada
 	if err := r.saveStateLocked(); err != nil {
-		r.restoreSeats(stages)
+		r.restoreSeats(localStages)
 		reservation.Status = enum.Confirmada
-		return fmt.Errorf("salvar cancelamento e assentos: %w", err)
+		return nil, fmt.Errorf("salvar cancelamento e assentos: %w", err)
 	}
 
-	return nil
+	return append([]models.ReservedSegment(nil), reservation.Segments...), nil
 }
 
 type reservedStage struct {

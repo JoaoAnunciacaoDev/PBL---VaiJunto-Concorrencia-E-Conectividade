@@ -1,7 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
 	"time"
 
 	"github.com/JoaoAnunciacaoDev/PBL---VaiJunto-Concorrencia-E-Conectividade/internal/enum"
@@ -28,6 +32,27 @@ func (s *Server) handleConfirmReservation(payload json.RawMessage, session *Sess
 	for i := range dto.Segments {
 		if dto.Segments[i].CompanyID == "" {
 			dto.Segments[i].CompanyID = s.companyID
+		}
+	}
+
+	// Validação de reserva duplicada: impede que o mesmo passageiro reserve novamente
+	// um itinerário contendo trechos para os quais já possui reserva confirmada ativa.
+	existingReservations, err := s.repository.GetReservationsByPassengerID(session.UserID)
+	if err == nil {
+		for _, res := range existingReservations {
+			if res.Status != enum.Confirmada {
+				continue
+			}
+			for _, existingSeg := range res.Segments {
+				for _, reqSeg := range dto.Segments {
+					if existingSeg.SegmentID == reqSeg.SegmentID {
+						return protocol.Response{
+							Success: "error",
+							Message: "Você já possui uma reserva confirmada para este itinerário.",
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -165,11 +190,56 @@ func (s *Server) handleCancelReservation(payload json.RawMessage, session *Sessi
 		return protocol.Response{Success: "error", Message: "Identificador da reserva inválido."}
 	}
 
-	if err := s.repository.CancelReservation(dto.ReservationID, session.UserID); err != nil {
+	segments, err := s.repository.CancelReservation(dto.ReservationID, session.UserID, s.companyID)
+	if err != nil {
 		return protocol.Response{Success: "error", Message: err.Error()}
 	}
 
+	for _, seg := range segments {
+		if seg.CompanyID != "" && seg.CompanyID != s.companyID {
+			go s.releaseRemoteSegment(seg.CompanyID, seg.RideID, seg.SegmentID)
+		}
+	}
+
 	return protocol.Response{Success: "success", Message: "Reserva cancelada com sucesso."}
+}
+
+func (s *Server) releaseRemoteSegment(companyID string, rideID, segmentID uuid.UUID) {
+	if s.peers == nil {
+		return
+	}
+	peer, exists := s.peers.Get(companyID)
+	if !exists {
+		log.Printf("[cancel] peer %s não encontrado para liberar assento do trecho %s", companyID, segmentID)
+		return
+	}
+
+	body, _ := json.Marshal(map[string]any{
+		"ride_id":                rideID,
+		"coordinator_company_id": s.companyID,
+	})
+
+	url := fmt.Sprintf("%s/internal/v1/segments/%s/release", peer.InternalURL, segmentID)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		log.Printf("[cancel] erro ao criar requisição de release para %s: %v", url, err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		log.Printf("[cancel] falha ao notificar release do trecho %s para empresa %s: %v", segmentID, companyID, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[cancel] release do trecho %s na empresa %s retornou status HTTP %d", segmentID, companyID, resp.StatusCode)
+		return
+	}
+
+	log.Printf("[cancel] assento do trecho %s liberado com sucesso na empresa %s", segmentID, companyID)
 }
 
 func reservationResponse(data any, message string) protocol.Response {
