@@ -49,6 +49,8 @@ func (s *Server) handleCreateRide(payload json.RawMessage, session *Session) pro
 	ride := &models.Ride{
 		ID:          uuid.New(),
 		DriverID:    driver.ID,
+		DriverName:  driver.Name,
+		CompanyID:   s.companyID,
 		DepartureAt: dto.DepartureAt,
 		Segments:    segments,
 	}

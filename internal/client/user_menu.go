@@ -13,7 +13,11 @@ import (
 
 func authenticatedMenu(tcpClient *TCPClient, input *bufio.Reader, output io.Writer, user protocol.UserResponse) enum.MenuResult {
 	for {
-		fmt.Fprintf(output, "\n=== Área de %s ===\n", user.Name)
+		companyHeader := ""
+		if user.CompanyID != "" {
+			companyHeader = fmt.Sprintf(" [%s]", user.CompanyID)
+		}
+		fmt.Fprintf(output, "\n=== Área de %s%s ===\n", user.Name, companyHeader)
 		fmt.Fprintln(output, "1 - Ver meu perfil")
 		fmt.Fprintln(output, "2 - Opções de passageiro")
 
@@ -94,7 +98,11 @@ func showMyProfile(tcpClient *TCPClient, output io.Writer) bool {
 	if user.Role == models.RoleDriver {
 		profile = "Motorista"
 	}
-	fmt.Fprintf(output, "Nome: %s\nE-mail: %s\nPerfil: %s\n", user.Name, user.Email, profile)
+	company := user.CompanyID
+	if company == "" {
+		company = "Não informada"
+	}
+	fmt.Fprintf(output, "Nome: %s\nE-mail: %s\nPerfil: %s\nEmpresa: %s\n", user.Name, user.Email, profile, company)
 	return true
 }
 

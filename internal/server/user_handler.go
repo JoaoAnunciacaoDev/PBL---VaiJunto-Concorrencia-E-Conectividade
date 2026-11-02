@@ -71,7 +71,7 @@ func (s *Server) handleRegisterUser(payload json.RawMessage) protocol.Response {
 		}
 	}
 
-	return userResponse(user, "Usuário cadastrado com sucesso")
+	return s.userResponse(user, "Usuário cadastrado com sucesso")
 }
 
 func (s *Server) handleLogin(payload json.RawMessage, session *Session) protocol.Response {
@@ -104,7 +104,7 @@ func (s *Server) handleLogin(payload json.RawMessage, session *Session) protocol
 	session.Role = user.Role
 	session.UserName = user.Name
 
-	return userResponse(*user, "Login bem-sucedido")
+	return s.userResponse(*user, "Login bem-sucedido")
 }
 
 func (s *Server) handleGetMyProfile(session *Session) protocol.Response {
@@ -124,7 +124,7 @@ func (s *Server) handleGetMyProfile(session *Session) protocol.Response {
 		}
 	}
 
-	return userResponse(*user, "Perfil obtido com sucesso")
+	return s.userResponse(*user, "Perfil obtido com sucesso")
 }
 
 func (s *Server) handleLogout(session *Session) protocol.Response {
@@ -142,12 +142,13 @@ func (s *Server) handleLogout(session *Session) protocol.Response {
 	}
 }
 
-func userResponse(user models.User, message string) protocol.Response {
+func (s *Server) userResponse(user models.User, message string) protocol.Response {
 	data, err := json.Marshal(protocol.UserResponse{
-		ID:    user.ID,
-		Name:  user.Name,
-		Email: user.Email,
-		Role:  user.Role,
+		ID:        user.ID,
+		Name:      user.Name,
+		Email:     user.Email,
+		Role:      user.Role,
+		CompanyID: s.companyID,
 	})
 	if err != nil {
 		return protocol.Response{

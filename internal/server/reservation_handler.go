@@ -80,10 +80,21 @@ func (s *Server) reservationResponse(reservation models.Reservation) (protocol.R
 	segments := make([]protocol.ReservationStageResponse, 0, len(reservation.Segments))
 	for _, reservedSegment := range reservation.Segments {
 		var stage *models.Stage
+		var compID, driverName string
+		compID = reservedSegment.CompanyID
+		if compID == "" {
+			compID = s.companyID
+		}
 
 		// Se a carona é local, busca do repositório local
 		ride, err := s.repository.GetRideByID(reservedSegment.RideID)
 		if err == nil {
+			driverName = ride.DriverName
+			if driverName == "" {
+				if d, dErr := s.repository.GetUserByID(ride.DriverID); dErr == nil {
+					driverName = d.Name
+				}
+			}
 			for index := range ride.Segments {
 				if ride.Segments[index].ID == reservedSegment.SegmentID {
 					stage = &ride.Segments[index]
@@ -99,6 +110,7 @@ func (s *Server) reservationResponse(reservation models.Reservation) (protocol.R
 				if rErr == nil {
 					for _, r := range remoteRides {
 						if r.ID == reservedSegment.RideID {
+							driverName = r.DriverName
 							for index := range r.Segments {
 								if r.Segments[index].ID == reservedSegment.SegmentID {
 									stage = &r.Segments[index]
@@ -125,6 +137,8 @@ func (s *Server) reservationResponse(reservation models.Reservation) (protocol.R
 		segments = append(segments, protocol.ReservationStageResponse{
 			RideID:      reservedSegment.RideID,
 			SegmentID:   reservedSegment.SegmentID,
+			CompanyID:   compID,
+			DriverName:  driverName,
 			Origin:      origin,
 			Destination: dest,
 			DepartureAt: depAt,

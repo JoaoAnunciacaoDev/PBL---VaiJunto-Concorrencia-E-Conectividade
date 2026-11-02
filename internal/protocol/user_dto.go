@@ -16,7 +16,8 @@ type UserResponse struct {
 	ID    uuid.UUID       `json:"uuid"`
 	Name  string          `json:"name"`
 	Email string          `json:"email"`
-	Role  models.UserRole `json:"role"`
+	Role      models.UserRole `json:"role"`
+	CompanyID string          `json:"company_id,omitempty"`
 }
 
 type DriverResponse struct {

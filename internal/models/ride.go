@@ -9,6 +9,8 @@ import (
 type Ride struct {
 	ID          uuid.UUID `json:"id"`
 	DriverID    uuid.UUID `json:"driver_id"`
+	DriverName  string    `json:"driver_name,omitempty"`
+	CompanyID   string    `json:"company_id,omitempty"`
 	DepartureAt time.Time `json:"departure_at"`
 	Segments    []Stage   `json:"segments"`
 	Cancelled   bool      `json:"cancelled"`

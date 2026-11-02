@@ -111,15 +111,15 @@ Portas publicadas na máquina host:
 - **Empresa B:** TCP `8082` | REST `8083`
 - **Empresa C:** TCP `8084` | REST `8085`
 
-#### 📋 Comandos Úteis para Logs no Docker Compose:
+#### Monitoramento de Logs no Docker Compose:
 ```bash
-# Ver logs de todos os 3 servidores juntos em tempo real:
+# Acompanhar logs de todos os 3 servidores simultaneamente em tempo real:
 docker compose -f docker/docker-compose.yaml logs -f empresa-a empresa-b empresa-c
 
-# Ver logs de um servidor específico:
+# Acompanhar logs de um servidor específico:
 docker compose -f docker/docker-compose.yaml logs -f empresa-a
 
-# Ver apenas as últimas 50 linhas sem travar o terminal:
+# Consultar as últimas 50 linhas do log sem manter o processo anexado:
 docker compose -f docker/docker-compose.yaml logs --tail 50 empresa-a
 ```
 
@@ -130,56 +130,57 @@ docker compose -f docker/docker-compose.yaml down
 
 ---
 
-### 🌱 Catálogo de Viagens e Dados Pré-configurados (Seed)
+### Catálogo de Viagens e Dados Pré-configurados (Seed)
 
-> **Sobre as Datas das Viagens:**  
-> Por padrão, o `cmd/seed` popula as caronas automaticamente para **HOJE** e para **AMANHÃ** (duas datas completas no formato `dd/mm/aaaa`). Assim, você pode testar hoje ou amanhã no laboratório digitando a data do próprio dia ou do dia seguinte — todas as viagens estarão ativas e prontas para busca!
+> **Disponibilidade Temporal dos Dados:**  
+> Por padrão, o utilitário `cmd/seed` cria registros para a data corrente (`D`) e para a data subsequente (`D+1`), no formato `dd/mm/aaaa`. Essa estratégia assegura a disponibilidade contínua de itinerários para consultas e testes independentemente do dia em que o ambiente for instanciado.
 
-#### 1. Catálogo Completo de Caronas por Empresa
+#### 1. Catálogo de Caronas por Empresa
 
-##### 🏢 Empresa A (Servidor: `:8080` | REST: `:8081`)
+##### Empresa A (Servidor TCP: `:8080` | REST: `:8081`)
 * **Motorista:** Ana (`ana@empresa-a.com`) | Veículo: *Toyota Corolla Branco (Placa: ANA-1A01)* | Capacidade: 4 vagas
-  * **Carona 1 (Multi-trecho conectável):**
-    * Trecho 1: `Salvador` (07:00) ➔ `Feira de Santana` (08:30) — **R$ 35,00**
-    * Trecho 2: `Feira de Santana` (08:45) ➔ `Alagoinhas` (09:45) — **R$ 20,00**
-  * **Carona 2 (Concorrente direta):**
-    * Trecho Único: `Feira de Santana` (08:00) ➔ `Salvador` (09:30) — **R$ 35,00**
+  * **Carona 1 (Itinerário com múltiplos trechos):**
+    * Trecho 1: `Salvador` (07:00) ➔ `Feira de Santana` (08:30) — R$ 35,00
+    * Trecho 2: `Feira de Santana` (08:45) ➔ `Alagoinhas` (09:45) — R$ 20,00
+  * **Carona 2 (Rota Concorrente):**
+    * Trecho Único: `Feira de Santana` (08:00) ➔ `Salvador` (09:30) — R$ 35,00
 
-##### 🏢 Empresa B (Servidor: `:8082` | REST: `:8083`)
+##### Empresa B (Servidor TCP: `:8082` | REST: `:8083`)
 * **Motorista:** Bruno (`bruno@empresa-b.com`) | Veículo: *Honda Civic Prata (Placa: BRU-2B02)* | Capacidade: 4 vagas
-  * **Carona 1 (Conexão 2PC para Chapada):**
-    * Trecho Único: `Feira de Santana` (09:00) ➔ `Lençóis` (13:00) — **R$ 65,00**  
-      *(Conecta perfeitamente com a Carona 1 da Ana que chega a Feira às 08:30!)*
-  * **Carona 2 (Concorrente direta mais barata):**
-    * Trecho Único: `Feira de Santana` (08:15) ➔ `Salvador` (09:45) — **R$ 30,00**
+  * **Carona 1 (Trecho Intermediário para Chapada Diamantina):**
+    * Trecho Único: `Feira de Santana` (09:00) ➔ `Lençóis` (13:00) — R$ 65,00  
+      *(Permite conexão com a Carona 1 da Empresa A, cuja chegada em Feira de Santana ocorre às 08:30)*
+  * **Carona 2 (Rota Concorrente):**
+    * Trecho Único: `Feira de Santana` (08:15) ➔ `Salvador` (09:45) — R$ 30,00
 
-##### 🏢 Empresa C (Servidor: `:8084` | REST: `:8085`)
+##### Empresa C (Servidor TCP: `:8084` | REST: `:8085`)
 * **Motorista:** Carlos (`carlos@empresa-c.com`) | Veículo: *Jeep Renegade Preto (Placa: CAR-3C03)* | Capacidade: 4 vagas
-  * **Carona 1 (Conexão 2PC Sudoeste):**
-    * Trecho Único: `Lençóis` (14:00) ➔ `Vitória da Conquista` (18:00) — **R$ 55,00**  
-      *(Conecta com o Bruno que chega a Lençóis às 13:00!)*
-  * **Carona 2 (Concorrente direta mais barata do consórcio):**
-    * Trecho Único: `Feira de Santana` (08:30) ➔ `Salvador` (10:00) — **R$ 25,00**
+  * **Carona 1 (Trecho Final para Região Sudoeste):**
+    * Trecho Único: `Lençóis` (14:00) ➔ `Vitória da Conquista` (18:00) — R$ 55,00  
+      *(Permite conexão com a Carona 1 da Empresa B, cuja chegada em Lençóis ocorre às 13:00)*
+  * **Carona 2 (Rota Concorrente):**
+    * Trecho Único: `Feira de Santana` (08:30) ➔ `Salvador` (10:00) — R$ 25,00
 
 ---
 
-#### 2. Cenários Prontos para Demonstração
+#### 2. Cenários de Validação do Consórcio
 
-* **Cenário A — Busca Federada com Concorrência:**
-  * No cliente, busque: Origem `Feira de Santana` ➔ Destino `Salvador`
-  * O consórcio retornará as **3 opções simultâneas** para comparação:
-    1. Empresa C (Carlos): **R$ 25,00** (08:30)
-    2. Empresa B (Bruno): **R$ 30,00** (08:15)
-    3. Empresa A (Ana): **R$ 35,00** (08:00)
+* **Cenário A — Consulta Federada e Comparação de Tarifas:**
+  * **Rota consultada:** `Feira de Santana` ➔ `Salvador`
+  * **Comportamento:** O servidor consultado agrega ofertas de todos os nós ativos do consórcio, retornando três opções concorrentes:
+    1. Empresa C (Carlos): R$ 25,00 (08:30)
+    2. Empresa B (Bruno): R$ 30,00 (08:15)
+    3. Empresa A (Ana): R$ 35,00 (08:00)
 
-* **Cenário B — Two-Phase Commit entre 2 Empresas (SSA ➔ Lençóis):**
-  * No cliente, busque: Origem `Salvador` ➔ Destino `Lençóis`
-  * Itinerário composto por: Trecho 1 na **Empresa A** (07:00) + Trecho 2 na **Empresa B** (09:00).
-  * Reserva atômica via 2PC com coordenação distribuída.
+* **Cenário B — Transação Atômica Distribuída entre 2 Empresas (2PC):**
+  * **Rota consultada:** `Salvador` ➔ `Lençóis`
+  * **Composição:** Trecho 1 na **Empresa A** (07:00) + Trecho 2 na **Empresa B** (09:00).
+  * **Garantia:** Coordenação atômica Two-Phase Commit entre os servidores da Empresa A (coordenador) e da Empresa B (participante).
 
-* **Cenário C — Two-Phase Commit Triangular entre 3 Empresas (SSA ➔ Conquista):**
-  * No cliente, busque: Origem `Salvador` ➔ Destino `Vitória da Conquista`
-  * Itinerário composto por 3 trechos: **Empresa A** (SSA➔FSA) + **Empresa B** (FSA➔Lençóis) + **Empresa C** (Lençóis➔Conquista).
+* **Cenário C — Transação Atômica Triangular entre 3 Empresas (2PC):**
+  * **Rota consultada:** `Salvador` ➔ `Vitória da Conquista`
+  * **Composição:** Trecho 1 na **Empresa A** (SSA ➔ FSA) + Trecho 2 na **Empresa B** (FSA ➔ Lençóis) + Trecho 3 na **Empresa C** (Lençóis ➔ Conquista).
+  * **Garantia:** Coordenação do commit em duas fases envolvendo simultaneamente os três nós independentes do consórcio.
 
 ---
 
@@ -197,16 +198,16 @@ docker compose -f docker/docker-compose.yaml down
 
 ---
 
-### Cenário 2: Execução em 3 Computadores Físicos Distintos (Apresentação)
+### Cenário 2: Execução Distribuída em Múltiplos Computadores Físicos
 
-Na apresentação com 3 computadores na mesma rede Wi-Fi ou cabo de rede local (LAN):
+Para implantação do consórcio em computadores distintos interconectados via rede local (LAN ou Wi-Fi):
 
-1. Descubra o IP local de cada computador (via `ipconfig` no Windows ou `ip a` no Linux):
-   - **PC 1 (Empresa A):** ex: `192.168.1.10`
-   - **PC 2 (Empresa B):** ex: `192.168.1.20`
-   - **PC 3 (Empresa C):** ex: `192.168.1.30`
+1. Identifique o endereço IP local de cada computador (`ip a` ou `hostname -I` no Linux; `ipconfig` no Windows):
+   - **PC 1 (Empresa A):** Exemplo: `192.168.1.10`
+   - **PC 2 (Empresa B):** Exemplo: `192.168.1.20`
+   - **PC 3 (Empresa C):** Exemplo: `192.168.1.30`
 
-#### Opção A: Executando Diretamente com Go Nativo
+#### Opção A: Execução Nativa em Go
 
 **No Computador 1 (Empresa A):**
 ```bash
@@ -223,87 +224,86 @@ go run ./cmd/api-server -company-id empresa-b -tcp-addr 0.0.0.0:8080 -http-addr 
 go run ./cmd/api-server -company-id empresa-c -tcp-addr 0.0.0.0:8080 -http-addr 0.0.0.0:8081 -peers "empresa-a=http://192.168.1.10:8081,empresa-b=http://192.168.1.20:8081"
 ```
 
-#### Opção B: Executando com Docker em Cada Computador
+#### Opção B: Execução com Contêineres Docker Individuais
 
-Neste cenário, cada computador roda **apenas o contêiner da sua própria empresa**. Como cada máquina publica as portas `8080` e `8081`, elas comunicam-se entre si pelo IP da rede local física.
+Neste modelo, cada estação executa exclusivamente o contêiner do seu respectivo nó, expondo as portas `8080` (clientes) e `8081` (comunicação inter-nós):
 
-1. Primeiro construa a imagem em cada PC:
+1. Construção da imagem Docker em cada estação:
 ```bash
 docker build -t vaijunto:local -f docker/Dockerfile .
 ```
 
-2. Em seguida, suba o contêiner em cada máquina (em segundo plano com `-d`):
+2. Inicialização dos serviços em cada estação:
 
-**💻 No Computador 1 (Empresa A - IP `192.168.1.10`):**
+**No Computador 1 (Empresa A):**
 ```bash
 docker run -d --name empresa-a --restart unless-stopped -p 8080:8080 -p 8081:8081 -v empresa-a-data:/app/storage vaijunto:local /app/bin/api-server -company-id empresa-a -tcp-addr :8080 -http-addr :8081 -peers "empresa-b=http://192.168.1.20:8081,empresa-c=http://192.168.1.30:8081"
 ```
 
-**💻 No Computador 2 (Empresa B - IP `192.168.1.20`):**
+**No Computador 2 (Empresa B):**
 ```bash
 docker run -d --name empresa-b --restart unless-stopped -p 8080:8080 -p 8081:8081 -v empresa-b-data:/app/storage vaijunto:local /app/bin/api-server -company-id empresa-b -tcp-addr :8080 -http-addr :8081 -peers "empresa-a=http://192.168.1.10:8081,empresa-c=http://192.168.1.30:8081"
 ```
 
-**💻 No Computador 3 (Empresa C - IP `192.168.1.30`):**
+**No Computador 3 (Empresa C):**
 ```bash
 docker run -d --name empresa-c --restart unless-stopped -p 8080:8080 -p 8081:8081 -v empresa-c-data:/app/storage vaijunto:local /app/bin/api-server -company-id empresa-c -tcp-addr :8080 -http-addr :8081 -peers "empresa-a=http://192.168.1.10:8081,empresa-b=http://192.168.1.20:8081"
 ```
 
-#### 📋 Como visualizar os logs de cada servidor:
-Como cada servidor roda no seu respectivo computador, o log funciona diretamente no terminal daquela máquina:
+#### Monitoramento de Logs por Nó:
 ```bash
-# No terminal do PC 1:
+# No terminal da Empresa A:
 docker logs -f empresa-a
 
-# No terminal do PC 2:
+# No terminal da Empresa B:
 docker logs -f empresa-b
 
-# No terminal do PC 3:
+# No terminal da Empresa C:
 docker logs -f empresa-c
 ```
-*(Durante uma reserva com 2PC, você verá o terminal do PC 1 registrar o `[coordinator] PREPARE/COMMIT` e o terminal do PC 2 registrar o recebimento HTTP dos endpoints do participante).*
+*(Durante uma transação distribuída, o nó coordenador registrará os estágios do 2PC enquanto o nó participante registrará o processamento HTTP nos endpoints de pré-reserva e commit).*
 
 ---
 
-### Populando os 3 Computadores no Laboratório
+### Inicialização dos Dados no Consórcio Distribuído
 
-Após ligar os servidores nas 3 máquinas, execute o `seed` a partir de **qualquer computador** da rede (basta rodar uma única vez):
+Após a inicialização dos servidores nas três estações, execute o povoamento inicial a partir de **qualquer computador** da rede (operação única para todo o consórcio):
 
 ```bash
-# Usando Go nativo:
+# Execução via Go:
 go run ./cmd/seed -servers="empresa-a=192.168.1.10:8080,empresa-b=192.168.1.20:8080,empresa-c=192.168.1.30:8080"
 
-# Ou usando Docker (não precisa ter Go instalado):
+# Execução via Docker:
 docker run --rm vaijunto:local /app/bin/seed -servers="empresa-a=192.168.1.10:8080,empresa-b=192.168.1.20:8080,empresa-c=192.168.1.30:8080"
 ```
 
 ---
 
-### Conectando os Clientes de Terminal
+### Execução dos Clientes de Terminal
 
-Qualquer computador pode abrir quantos clientes desejar (passageiros e motoristas). O cliente pode ser executado **nativamente em Go** ou **via Docker**:
+O cliente interativo de terminal pode ser executado em qualquer computador conectado à rede:
 
-#### 1. Usando Go nativo:
+#### 1. Execução via Go Nativo:
 ```bash
-# Conectar à Empresa A (do próprio PC 1 use localhost ou o IP; de outro PC use o IP):
+# Conexão à Empresa A:
 go run ./cmd/api-client -addr 192.168.1.10:8080
 
-# Conectar à Empresa B:
+# Conexão à Empresa B:
 go run ./cmd/api-client -addr 192.168.1.20:8080
 
-# Conectar à Empresa C:
+# Conexão à Empresa C:
 go run ./cmd/api-client -addr 192.168.1.30:8080
 ```
 
-#### 2. Usando Docker (necessário `-it` para terminal interativo):
+#### 2. Execução via Contêiner Docker (Interativo):
 ```bash
-# Conectar à Empresa A:
+# Conexão à Empresa A:
 docker run -it --rm vaijunto:local /app/bin/api-client -addr 192.168.1.10:8080
 
-# Conectar à Empresa B:
+# Conexão à Empresa B:
 docker run -it --rm vaijunto:local /app/bin/api-client -addr 192.168.1.20:8080
 
-# Conectar à Empresa C:
+# Conexão à Empresa C:
 docker run -it --rm vaijunto:local /app/bin/api-client -addr 192.168.1.30:8080
 ```
 
@@ -353,9 +353,9 @@ go test ./... -v
 
 ---
 
-## Conceitos-Chave para Apresentação
+## Fundamentos Teóricos e Garantias de Consistência
 
-- **Consenso sem Coordenador Fixo:** Qualquer empresa que receba o pedido do passageiro atua como coordenadora daquela transação 2PC específica.
-- **Ordem Total Determinística:** O desempate em disputas concorrentes de assentos utiliza o par `(LamportClock, CoordinatorCompanyID)`. Como o ID da empresa é uma string única, nunca há empate sem vencedor.
-- **Ponto de Não-Retorno:** A decisão de `COMMIT` é persistida no WAL pelo coordenador com `fsync` antes de enviar mensagens aos participantes. Em caso de queda, a transação é recuperada e finalizada no boot.
-- **Prevenção do Blocking Problem:** Locks temporizados por TTL nos participantes impedem que falhas permanentes de coordenadores travem assentos indefinidamente.
+- **Consenso sem Coordenador Fixo:** Qualquer nó do consórcio que recebe a solicitação de reserva atua como coordenador autônomo para aquela transação específica.
+- **Ordem Total Determinística:** A resolução de conflitos concorrentes por assentos utiliza a tupla `(LamportClock, CoordinatorCompanyID)`. Como o identificador da empresa é único no consórcio, assegura-se desempate determinístico sem risco de impasses (*deadlocks*).
+- **Ponto de Não-Retorno:** A decisão de `COMMIT` é registrada no Write-Ahead Log (WAL) com chamada síncrona `fsync` antes do envio das confirmações aos participantes. Em caso de falha de energia, o estado é reconstruído durante a inicialização do nó.
+- **Prevenção do Blocking Problem:** Locks temporizados por TTL nos nós participantes impedem que indisponibilidades prolongadas de nós coordenadores causem bloqueio permanente de vagas.

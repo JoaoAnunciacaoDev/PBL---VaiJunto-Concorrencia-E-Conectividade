@@ -71,6 +71,9 @@ func (r *Repository) SaveRideForDriver(ride *models.Ride) error {
 	if !exists || driver.Vehicle == nil {
 		return errors.New("nenhum veículo cadastrado")
 	}
+	if ride.DriverName == "" && driver.Name != "" {
+		ride.DriverName = driver.Name
+	}
 	for _, stage := range ride.Segments {
 		if stage.AvailableSeats > driver.Vehicle.SeatCapacity {
 			return errors.New("a capacidade da carona excede a capacidade atual do veículo")
@@ -100,7 +103,16 @@ func (r *Repository) GetRideByID(id uuid.UUID) (*models.Ride, error) {
 		return nil, errors.New("carona não encontrada")
 	}
 
-	return cloneRide(ride), nil
+	c := cloneRide(ride)
+	if c.DriverName == "" {
+		r.usersMu.RLock()
+		if u, ok := r.userByIDLocked(c.DriverID); ok {
+			c.DriverName = u.Name
+		}
+		r.usersMu.RUnlock()
+	}
+
+	return c, nil
 }
 
 // GetRideBySegmentID busca a carona que contém o segmento especificado.
@@ -111,7 +123,15 @@ func (r *Repository) GetRideBySegmentID(segmentID uuid.UUID) (*models.Ride, erro
 	for _, ride := range r.rides {
 		for _, s := range ride.Segments {
 			if s.ID == segmentID {
-				return cloneRide(ride), nil
+				c := cloneRide(ride)
+				if c.DriverName == "" {
+					r.usersMu.RLock()
+					if u, ok := r.userByIDLocked(c.DriverID); ok {
+						c.DriverName = u.Name
+					}
+					r.usersMu.RUnlock()
+				}
+				return c, nil
 			}
 		}
 	}
@@ -141,10 +161,19 @@ func (r *Repository) GetActiveRidesByDate(date time.Time) ([]*models.Ride, error
 	r.ridesMu.RLock()
 	defer r.ridesMu.RUnlock()
 
+	r.usersMu.RLock()
+	defer r.usersMu.RUnlock()
+
 	rides := make([]*models.Ride, 0)
 	for _, ride := range r.rides {
 		if !ride.Cancelled && sameCalendarDate(ride.DepartureAt, date) {
-			rides = append(rides, cloneRide(ride))
+			c := cloneRide(ride)
+			if c.DriverName == "" {
+				if u, ok := r.userByIDLocked(c.DriverID); ok {
+					c.DriverName = u.Name
+				}
+			}
+			rides = append(rides, c)
 		}
 	}
 

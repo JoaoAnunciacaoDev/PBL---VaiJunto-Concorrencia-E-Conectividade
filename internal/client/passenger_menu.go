@@ -209,13 +209,21 @@ func listMyReservations(tcpClient *TCPClient, output io.Writer) bool {
 	for _, reservation := range reservations {
 		fmt.Fprintf(output, "\nID: %s\nStatus: %s\n", reservation.ID, reservation.Status)
 		for index, segment := range reservation.Segments {
-			fmt.Fprintf(output, "%d. %s → %s | %s até %s | %s\n",
+			extra := ""
+			if segment.CompanyID != "" {
+				extra += " | Empresa: " + segment.CompanyID
+			}
+			if segment.DriverName != "" {
+				extra += " | Motorista: " + segment.DriverName
+			}
+			fmt.Fprintf(output, "%d. %s → %s | %s até %s | %s%s\n",
 				index+1,
 				segment.Origin,
 				segment.Destination,
 				segment.DepartureAt.Format(rideDateTimeLayout),
 				segment.ArrivalAt.Format(rideDateTimeLayout),
 				formatCents(segment.PriceCents),
+				extra,
 			)
 		}
 	}
@@ -284,7 +292,14 @@ func cancelReservation(tcpClient *TCPClient, input *bufio.Reader, output io.Writ
 func printItinerary(output io.Writer, index int, itinerary protocol.ItineraryResponse) {
 	fmt.Fprintf(output, "\n=== Itinerário %d ===\nPartida: %s\nChegada: %s\n", index, itinerary.DepartureAt.Format(rideDateTimeLayout), itinerary.ArrivalAt.Format(rideDateTimeLayout))
 	for _, segment := range itinerary.Segments {
-		fmt.Fprintf(output, "%s → %s | %s até %s | %s\n", segment.Origin, segment.Destination, segment.DepartureAt.Format(rideDateTimeLayout), segment.ArrivalAt.Format(rideDateTimeLayout), formatCents(segment.PriceCents))
+		extra := ""
+		if segment.CompanyID != "" {
+			extra += fmt.Sprintf(" | Empresa: %s", segment.CompanyID)
+		}
+		if segment.DriverName != "" {
+			extra += fmt.Sprintf(" | Motorista: %s", segment.DriverName)
+		}
+		fmt.Fprintf(output, "%s → %s | %s até %s | %s%s\n", segment.Origin, segment.Destination, segment.DepartureAt.Format(rideDateTimeLayout), segment.ArrivalAt.Format(rideDateTimeLayout), formatCents(segment.PriceCents), extra)
 	}
 	fmt.Fprintf(output, "Preço total: %s\n", formatCents(itinerary.TotalPriceCents))
 }

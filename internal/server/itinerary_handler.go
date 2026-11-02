@@ -16,7 +16,8 @@ import (
 
 type itineraryEdge struct {
 	companyID string
-	rideID    uuid.UUID
+	rideID     uuid.UUID
+	driverName string
 	stage     models.Stage
 }
 
@@ -48,6 +49,14 @@ func (s *Server) handleSearchItineraries(payload json.RawMessage, session *Sessi
 	localRides, err := s.repository.GetActiveRidesByDate(dto.Date)
 	if err == nil {
 		for _, ride := range localRides {
+			if ride.DriverName == "" {
+				if d, dErr := s.repository.GetUserByID(ride.DriverID); dErr == nil {
+					ride.DriverName = d.Name
+				}
+			}
+			if ride.CompanyID == "" {
+				ride.CompanyID = s.companyID
+			}
 			sources = append(sources, RideSource{
 				CompanyID: s.companyID,
 				Ride:      ride,
@@ -64,6 +73,9 @@ func (s *Server) handleSearchItineraries(payload json.RawMessage, session *Sessi
 				continue
 			}
 			for _, ride := range remoteRides {
+				if ride.CompanyID == "" {
+					ride.CompanyID = peer.CompanyID
+				}
 				sources = append(sources, RideSource{
 					CompanyID: peer.CompanyID,
 					Ride:      ride,
@@ -134,7 +146,8 @@ func searchItinerariesFromSources(sources []RideSource, origin, destination enum
 			if stage.AvailableSeats > 0 {
 				edgesByOrigin[stage.Origin] = append(edgesByOrigin[stage.Origin], itineraryEdge{
 					companyID: src.CompanyID,
-					rideID:    src.Ride.ID,
+					rideID:     src.Ride.ID,
+					driverName: src.Ride.DriverName,
 					stage:     stage,
 				})
 			}
@@ -201,6 +214,7 @@ func itineraryFromPath(path []itineraryEdge) protocol.ItineraryResponse {
 			RideID:         edge.rideID,
 			SegmentID:      edge.stage.ID,
 			CompanyID:      edge.companyID,
+			DriverName:     edge.driverName,
 			Origin:         edge.stage.Origin,
 			Destination:    edge.stage.Destination,
 			DepartureAt:    edge.stage.DepartureAt,
