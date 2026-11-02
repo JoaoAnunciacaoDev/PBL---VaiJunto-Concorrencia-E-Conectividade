@@ -90,8 +90,10 @@ O `docker-compose.yaml` orquestra o consórcio com as 3 empresas em contêineres
 # 1. Constrói as imagens, sobe as 3 empresas e executa o seed multiconsórcio automaticamente
 docker compose -f docker/docker-compose.yaml up -d --build
 
-# 2. (Opcional) Acompanhar o log do seed que populou as 3 empresas:
-docker compose -f docker/docker-compose.yaml logs -f seed
+# 2. Acompanhar os logs dos servidores ativos em tempo real (coloridos por empresa):
+docker compose -f docker/docker-compose.yaml logs -f empresa-a empresa-b empresa-c
+
+# (Ou ver logs de uma empresa específica: logs -f empresa-a)
 
 # 3. Abre um cliente interativo de terminal conectado à Empresa A
 docker compose -f docker/docker-compose.yaml run --rm client
@@ -101,10 +103,24 @@ docker compose -f docker/docker-compose.yaml run --rm -e VAIJUNTO_SERVER_ADDR=em
 docker compose -f docker/docker-compose.yaml run --rm -e VAIJUNTO_SERVER_ADDR=empresa-c:8080 client
 ```
 
+> **Nota sobre o Cliente Interativo:** O serviço `client` utiliza o perfil `profiles: ["tools"]`, o que significa que o comando `docker compose up -d` sobe apenas os servidores e o seed em segundo plano. Para interagir com o terminal do cliente, utilize sempre `docker compose run --rm client`, conectando teclado e tela diretamente à sessão.
+
 Portas publicadas na máquina host:
 - **Empresa A:** TCP `8080` | REST `8081`
 - **Empresa B:** TCP `8082` | REST `8083`
 - **Empresa C:** TCP `8084` | REST `8085`
+
+#### 📋 Comandos Úteis para Logs no Docker Compose:
+```bash
+# Ver logs de todos os 3 servidores juntos em tempo real:
+docker compose -f docker/docker-compose.yaml logs -f empresa-a empresa-b empresa-c
+
+# Ver logs de um servidor específico:
+docker compose -f docker/docker-compose.yaml logs -f empresa-a
+
+# Ver apenas as últimas 50 linhas sem travar o terminal:
+docker compose -f docker/docker-compose.yaml logs --tail 50 empresa-a
+```
 
 Para parar e remover os contêineres:
 ```bash
