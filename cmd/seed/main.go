@@ -34,12 +34,21 @@ type serverTarget struct {
 func main() {
 	address := flag.String("addr", "", "endereço do servidor TCP único (ex: localhost:8080)")
 	serversFlag := flag.String("servers", "", "lista de servidores das empresas (ex: empresa-a=localhost:8080,empresa-b=localhost:8082,empresa-c=localhost:8084)")
-	dateText := flag.String("date", time.Now().AddDate(0, 0, 1).Format(dateLayout), "data das caronas, no formato dd/mm/aaaa")
+	dateText := flag.String("date", "", "data das caronas (dd/mm/aaaa). Se vazio, popula automaticamente para HOJE e AMANHÃ")
 	flag.Parse()
 
-	date, err := time.ParseInLocation(dateLayout, *dateText, time.Local)
-	if err != nil {
-		log.Fatalf("Data inválida: %v", err)
+	var dates []time.Time
+	if *dateText != "" {
+		d, err := time.ParseInLocation(dateLayout, *dateText, time.Local)
+		if err != nil {
+			log.Fatalf("Data inválida: %v", err)
+		}
+		dates = append(dates, d)
+	} else {
+		// Por padrão, popula para HOJE e para AMANHÃ para que os testes funcionem sem depender do dia/hora!
+		today := time.Now()
+		tomorrow := today.AddDate(0, 0, 1)
+		dates = append(dates, today, tomorrow)
 	}
 
 	targets := parseTargets(*address, *serversFlag)
@@ -49,16 +58,18 @@ func main() {
 
 	fmt.Printf("====================================================================\n")
 	fmt.Printf(" INICIANDO POVOAMENTO DE DADOS DE TESTE (CONSORCIO VAIJUNTO)\n")
-	fmt.Printf(" Data das caronas: %s\n", date.Format(dateLayout))
 	fmt.Printf(" Senha padrao de todas as contas: %s\n", seedPassword)
+	for _, d := range dates {
+		fmt.Printf("   -> Caronas sendo criadas para a data: %s\n", d.Format(dateLayout))
+	}
 	fmt.Printf("====================================================================\n\n")
 
-	// Se temos múltiplos servidores informados (cenário ideal do consórcio):
-	if len(targets) > 1 {
-		seedConsortium(targets, date)
-	} else {
-		// Modo servidor único compatível
-		seedSingleServer(targets[0].address, date)
+	for _, d := range dates {
+		if len(targets) > 1 {
+			seedConsortium(targets, d)
+		} else {
+			seedSingleServer(targets[0].address, d)
+		}
 	}
 
 	fmt.Println("\n====================================================================")

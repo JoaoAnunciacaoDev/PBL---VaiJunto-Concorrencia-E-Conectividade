@@ -73,13 +73,14 @@ services:
 
   # Cliente de terminal para testes manuais interativos
   # Exemplo de uso: docker compose run --rm client
-  # Para conectar na empresa B: docker compose run --rm -e VAIJUNTO_SERVER_ADDR=empresa-b:8080 client
+  # Para conectar na empresa B: docker compose run --rm client -addr empresa-b:8080
+  # Ou via env var: docker compose run --rm -e VAIJUNTO_SERVER_ADDR=empresa-b:8080 client
   client:
     image: vaijunto:local
     profiles: ["tools"]
     environment:
       - VAIJUNTO_SERVER_ADDR=empresa-a:8080
-    command: ["/app/bin/api-client"]
+    entrypoint: ["/app/bin/api-client"]
     stdin_open: true
     tty: true
 
