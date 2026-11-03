@@ -66,7 +66,8 @@ Cada empresa do consórcio executa uma instância completa e isolada do servidor
 │       └── recovery_test.go         # Recuperação de assentos bloqueados pós-crash
 ├── go.mod                   # Definição do módulo Go
 ├── go.sum                   # Checksums das dependências
-├── PROTOCOL.md              # Documentação das mensagens TCP/JSON
+├── PROTOCOL.md              # Documentação das mensagens TCP/JSON (Clientes)
+├── REST_API.md              # Documentação da API REST Inter-Servidores (2PC)
 └── README.md                # Esta documentação
 ```
 
@@ -165,7 +166,7 @@ docker compose -f docker/docker-compose.yaml down
 
 #### 2. Cenários de Validação do Consórcio
 
-* **Cenário A — Consulta Federada e Comparação de Tarifas:**
+* **Cenário A — Consulta e Comparação de Tarifas:**
   * **Rota consultada:** `Feira de Santana` ➔ `Salvador`
   * **Comportamento:** O servidor consultado agrega ofertas de todos os nós ativos do consórcio, retornando três opções concorrentes:
     1. Empresa C (Carlos): R$ 25,00 (08:30)
@@ -359,8 +360,8 @@ O projeto inclui um simulador autônomo de estresse (`cmd/simulator`) que gera d
 # Executando nativamente contra o consórcio:
 go run ./cmd/simulator -companies="empresa-a=localhost:8080,empresa-b=localhost:8082,empresa-c=localhost:8084" -passengers=30 -duration=15s
 
-# Ou via Docker Compose:
-docker compose -f docker/docker-compose.yaml run --rm simulator
+# Ou via Docker Compose (recompila e popula o banco de dados automaticamente):
+docker compose -f docker/docker-compose.yaml run --build --rm simulator
 ```
 
 ---
@@ -410,7 +411,7 @@ docker run --rm -v ${PWD}:/app -w /app golang:1.27-alpine go test -v ./internal/
 | Método | Endpoint | Descrição |
 |---|---|---|
 | `GET` | `/internal/v1/health` | Healthcheck do nó e valor atual do Lamport Clock |
-| `GET` | `/internal/v1/rides?date=YYYY-MM-DD` | Consulta federada de caronas ativas por data |
+| `GET` | `/internal/v1/rides?date=YYYY-MM-DD` | Consulta de caronas ativas por data |
 | `POST` | `/internal/v1/segments/:segmentID/prepare` | Fase 1 do 2PC: valida assento e adquire lock com TTL |
 | `POST` | `/internal/v1/segments/:segmentID/commit` | Fase 2 do 2PC: efetiva decremento e libera lock |
 | `POST` | `/internal/v1/segments/:segmentID/abort` | Fase 2 do 2PC: aborta transação e libera lock |
