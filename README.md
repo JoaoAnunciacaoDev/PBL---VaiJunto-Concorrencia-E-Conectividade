@@ -237,6 +237,8 @@ docker build -t vaijunto:local -f docker/Dockerfile .
 
 **No Computador 1 (Empresa A):**
 ```bash
+docker rm -f empresa-a 2>/dev/null
+
 docker run -d \
   --name empresa-a \
   --restart unless-stopped \
@@ -254,6 +256,8 @@ docker run -d \
 
 **No Computador 2 (Empresa B):**
 ```bash
+docker rm -f empresa-b 2>/dev/null
+
 docker run -d \
   --name empresa-b \
   --restart unless-stopped \
@@ -271,6 +275,8 @@ docker run -d \
 
 **No Computador 3 (Empresa C):**
 ```bash
+docker rm -f empresa-c 2>/dev/null
+
 docker run -d \
   --name empresa-c \
   --restart unless-stopped \
