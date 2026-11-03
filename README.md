@@ -329,7 +329,30 @@ O sistema conta com testes unitários em todos os pacotes e uma suíte completa 
 
 Execute toda a suíte de testes do projeto:
 ```bash
+# Executando nativamente com Go:
 go test ./... -v
+
+# Ou executando toda a suíte de testes via Docker (sem necessidade de Go instalado na máquina):
+docker run --rm -v ${PWD}:/app -w /app golang:1.24 go test ./... -v
+```
+
+Executar um teste específico (ex.: teste de reserva concorrente ou teste de recuperação):
+```bash
+# Executando nativamente com Go:
+go test -v -run TestNoDoubleSeatBooking ./tests/integration
+go test -v -run TestDistributedCancellationAndDuplicateCheck ./tests/integration
+
+# Ou executando o teste específico via Docker:
+docker run --rm -v ${PWD}:/app -w /app golang:1.24 go test -v -run TestNoDoubleSeatBooking ./tests/integration
+```
+
+Executar os testes de um pacote específico (ex.: consortium ou httpapi):
+```bash
+# Executando nativamente com Go:
+go test -v ./internal/consortium/...
+
+# Ou via Docker:
+docker run --rm -v ${PWD}:/app -w /app golang:1.24 go test -v ./internal/consortium/...
 ```
 
 ### Propriedades Distribuídas Provadas nos Testes:
