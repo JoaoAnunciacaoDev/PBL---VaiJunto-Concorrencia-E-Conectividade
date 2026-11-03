@@ -237,17 +237,53 @@ docker build -t vaijunto:local -f docker/Dockerfile .
 
 **No Computador 1 (Empresa A):**
 ```bash
-docker run -d --name empresa-a --restart unless-stopped -p 8080:8080 -p 8081:8081 -v empresa-a-data:/app/storage vaijunto:local /app/bin/api-server -company-id empresa-a -tcp-addr :8080 -http-addr :8081 -peers "empresa-b=http://192.168.1.20:8081,empresa-c=http://192.168.1.30:8081"
+docker run -d \
+  --name empresa-a \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -p 8081:8081 \
+  -v empresa-a-data:/app/storage \
+  vaijunto:local \
+  /app/bin/api-server \
+  -company-id empresa-a \
+  -data-dir /app/storage/data \
+  -tcp-addr :8080 \
+  -http-addr :8081 \
+  -peers "empresa-b=http://172.16.103.12:8081,empresa-c=http://172.16.103.10:8081"
 ```
 
 **No Computador 2 (Empresa B):**
 ```bash
-docker run -d --name empresa-b --restart unless-stopped -p 8080:8080 -p 8081:8081 -v empresa-b-data:/app/storage vaijunto:local /app/bin/api-server -company-id empresa-b -tcp-addr :8080 -http-addr :8081 -peers "empresa-a=http://192.168.1.10:8081,empresa-c=http://192.168.1.30:8081"
+docker run -d \
+  --name empresa-b \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -p 8081:8081 \
+  -v empresa-b-data:/app/storage \
+  vaijunto:local \
+  /app/bin/api-server \
+  -company-id empresa-b \
+  -data-dir /app/storage/data \
+  -tcp-addr :8080 \
+  -http-addr :8081 \
+  -peers "empresa-a=http://172.16.103.11:8081,empresa-c=http://172.16.103.10:8081"
 ```
 
 **No Computador 3 (Empresa C):**
 ```bash
-docker run -d --name empresa-c --restart unless-stopped -p 8080:8080 -p 8081:8081 -v empresa-c-data:/app/storage vaijunto:local /app/bin/api-server -company-id empresa-c -tcp-addr :8080 -http-addr :8081 -peers "empresa-a=http://192.168.1.10:8081,empresa-b=http://192.168.1.20:8081"
+docker run -d \
+  --name empresa-c \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -p 8081:8081 \
+  -v empresa-c-data:/app/storage \
+  vaijunto:local \
+  /app/bin/api-server \
+  -company-id empresa-c \
+  -data-dir /app/storage/data \
+  -tcp-addr :8080 \
+  -http-addr :8081 \
+  -peers "empresa-a=http://172.16.103.11:8081,empresa-b=http://172.16.103.12:8081"
 ```
 
 #### Monitoramento de Logs por Nó:
