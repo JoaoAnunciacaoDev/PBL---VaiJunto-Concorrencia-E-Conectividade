@@ -76,6 +76,7 @@ func (s *HTTPServer) setupRoutes() {
 	{
 		v1.GET("/health", s.handleHealth)
 		v1.GET("/rides", s.handleGetRides)
+		v1.GET("/rides/:rideID", s.handleGetRide)
 
 		// Endpoints do protocolo 2PC (Two-Phase Commit)
 		v1.POST("/segments/:segmentID/prepare", s.handlePrepare)
