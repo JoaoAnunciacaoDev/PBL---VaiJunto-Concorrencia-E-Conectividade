@@ -249,7 +249,28 @@ func seedEmpresaC(address string, date time.Time) {
 			{Origin: enum.FeiraDeSantana, Destination: enum.Salvador, DepartureAt: dep2, ArrivalAt: arr2, PriceCents: 2500, AvailableSeats: 4},
 		},
 	}
+	
 	_ = ensureRideOnAddress(address, carlos, ride2)
+
+	// Carona 3 (Teste de ABORT): somente uma vaga disponível
+	dep3 := time.Date(date.Year(), date.Month(), date.Day(), 10, 0, 0, 0, time.Local)
+	arr3 := dep3.Add(90 * time.Minute)
+
+	ride3 := protocol.CreateRideRequest{
+		DepartureAt: dep3,
+		Segments: []protocol.CreateStageRequest{
+			{
+				Origin:         enum.FeiraDeSantana,
+				Destination:    enum.Salvador,
+				DepartureAt:   dep3,
+				ArrivalAt:     arr3,
+				PriceCents:    2000,
+				AvailableSeats: 1,
+			},
+		},
+	}
+
+	_ = ensureRideOnAddress(address, carlos, ride3)
 }
 
 func seedGeneric(address, compID string, date time.Time) {
