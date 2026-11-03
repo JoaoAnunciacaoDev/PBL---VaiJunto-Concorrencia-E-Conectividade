@@ -129,35 +129,55 @@ func (s *Server) reservationResponse(reservation models.Reservation) (protocol.R
 		}
 
 		// Se não encontrou localmente e pertence a um parceiro, busca do peer
-		if stage == nil && s.peers != nil && reservedSegment.CompanyID != "" && reservedSegment.CompanyID != s.companyID {
-			if peer, exists := s.peers.Get(reservedSegment.CompanyID); exists {
-				remoteRides, rErr := s.fetchRemoteRides(peer.InternalURL, reservation.CreatedAt)
-				if rErr == nil {
-					for _, r := range remoteRides {
-						if r.ID == reservedSegment.RideID {
-							driverName = r.DriverName
-							for index := range r.Segments {
-								if r.Segments[index].ID == reservedSegment.SegmentID {
-									stage = &r.Segments[index]
-									break
-								}
-							}
-						}
-					}
+		if stage == nil && reservedSegment.CompanyID != "" &&
+			reservedSegment.CompanyID != s.companyID {
+
+			if s.peers == nil {
+				return protocol.ReservationResponse{}, fmt.Errorf("registro de parceiros indisponível")
+			}
+
+			peer, exists := s.peers.Get(reservedSegment.CompanyID)
+			if !exists {
+				return protocol.ReservationResponse{}, fmt.Errorf(
+					"empresa %s não encontrada", reservedSegment.CompanyID,
+				)
+			}
+
+			remoteRide, err := s.fetchRemoteRide(peer.InternalURL, reservedSegment.RideID)
+			if err != nil {
+				return protocol.ReservationResponse{}, fmt.Errorf(
+					"buscar carona %s na empresa %s: %w",
+					reservedSegment.RideID, reservedSegment.CompanyID, err,
+				)
+			}
+
+			driverName = remoteRide.DriverName
+
+			for index := range remoteRide.Segments {
+				if remoteRide.Segments[index].ID == reservedSegment.SegmentID {
+					stage = &remoteRide.Segments[index]
+					break
 				}
 			}
+		}
+
+		if stage == nil {
+			return protocol.ReservationResponse{}, fmt.Errorf(
+				"trecho %s não encontrado na carona %s da empresa %s",
+				reservedSegment.SegmentID,
+				reservedSegment.RideID,
+				compID,
+			)
 		}
 
 		var origin, dest enum.City
 		var depAt, arrAt time.Time
 		var price int
-		if stage != nil {
-			origin = stage.Origin
-			dest = stage.Destination
-			depAt = stage.DepartureAt
-			arrAt = stage.ArrivalAt
-			price = stage.PriceCents
-		}
+		origin = stage.Origin
+		dest = stage.Destination
+		depAt = stage.DepartureAt
+		arrAt = stage.ArrivalAt
+		price = stage.PriceCents
 
 		segments = append(segments, protocol.ReservationStageResponse{
 			RideID:      reservedSegment.RideID,
@@ -249,4 +269,30 @@ func reservationResponse(data any, message string) protocol.Response {
 	}
 
 	return protocol.Response{Success: "success", Message: message, Payload: payload}
+}
+
+func (s *Server) fetchRemoteRide(baseURL string, rideID uuid.UUID) (*models.Ride, error) {
+    url := fmt.Sprintf("%s/internal/v1/rides/%s", baseURL, rideID)
+
+    req, err := http.NewRequest(http.MethodGet, url, nil)
+    if err != nil {
+        return nil, err
+    }
+
+    resp, err := s.httpClient.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        return nil, fmt.Errorf("peer retornou status %d para carona %s", resp.StatusCode, rideID)
+    }
+
+    var ride models.Ride
+    if err := json.NewDecoder(resp.Body).Decode(&ride); err != nil {
+        return nil, err
+    }
+
+    return &ride, nil
 }
