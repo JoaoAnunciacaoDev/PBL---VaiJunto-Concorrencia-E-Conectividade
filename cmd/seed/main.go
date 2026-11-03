@@ -128,9 +128,10 @@ func parseTargets(singleAddr, serversRaw string) []serverTarget {
 			addr = strings.TrimSpace(addr)
 			if addr != "" {
 				compID := "empresa-a"
-				if idx == 1 {
+				switch idx {
+				case 1:
 					compID = "empresa-b"
-				} else if idx == 2 {
+				case 2:
 					compID = "empresa-c"
 				}
 				targets = append(targets, serverTarget{
@@ -166,7 +167,7 @@ func seedEmpresaA(address string, date time.Time) {
 	_ = registerUser(address, seedUser{name: "Alice Passageira", email: "alice@gmail.com", role: models.RolePassenger})
 
 	ana := seedUser{name: "Ana Motorista", email: "ana@empresa-a.com", role: models.RoleDriver}
-	anaVeh := protocol.CreateVehicleRequest{Plate: "ANA-1A01", Model: "Corolla", Color: "Branco", SeatCapacity: 4}
+	anaVeh := protocol.CreateVehicleRequest{Plate: "ANA-1A01", Model: "Corolla", Color: "Branco", SeatCapacity: 50}
 
 	// Carona 1: Salvador -> Feira de Santana -> Alagoinhas (alimenta conexões para B e C)
 	dep1 := time.Date(date.Year(), date.Month(), date.Day(), 7, 0, 0, 0, time.Local)
@@ -176,8 +177,8 @@ func seedEmpresaA(address string, date time.Time) {
 	ride1 := protocol.CreateRideRequest{
 		DepartureAt: dep1,
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.Salvador, Destination: enum.FeiraDeSantana, DepartureAt: dep1, ArrivalAt: arrFeira1, PriceCents: 3500, AvailableSeats: 4},
-			{Origin: enum.FeiraDeSantana, Destination: enum.Alagoinhas, DepartureAt: depFeira1, ArrivalAt: arrAla1, PriceCents: 2000, AvailableSeats: 4},
+			{Origin: enum.Salvador, Destination: enum.FeiraDeSantana, DepartureAt: dep1, ArrivalAt: arrFeira1, PriceCents: 3500, AvailableSeats: 50},
+			{Origin: enum.FeiraDeSantana, Destination: enum.Alagoinhas, DepartureAt: depFeira1, ArrivalAt: arrAla1, PriceCents: 2000, AvailableSeats: 50},
 		},
 	}
 	_ = seedDriver(address, ana, anaVeh, ride1)
@@ -188,7 +189,7 @@ func seedEmpresaA(address string, date time.Time) {
 	ride2 := protocol.CreateRideRequest{
 		DepartureAt: dep2,
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.FeiraDeSantana, Destination: enum.Salvador, DepartureAt: dep2, ArrivalAt: arr2, PriceCents: 3500, AvailableSeats: 4},
+			{Origin: enum.FeiraDeSantana, Destination: enum.Salvador, DepartureAt: dep2, ArrivalAt: arr2, PriceCents: 3500, AvailableSeats: 50},
 		},
 	}
 	_ = ensureRideOnAddress(address, ana, ride2)
@@ -198,7 +199,7 @@ func seedEmpresaB(address string, date time.Time) {
 	_ = registerUser(address, seedUser{name: "Beto Passageiro", email: "beto@gmail.com", role: models.RolePassenger})
 
 	bruno := seedUser{name: "Bruno Motorista", email: "bruno@empresa-b.com", role: models.RoleDriver}
-	brunoVeh := protocol.CreateVehicleRequest{Plate: "BRU-2B02", Model: "Civic", Color: "Prata", SeatCapacity: 4}
+	brunoVeh := protocol.CreateVehicleRequest{Plate: "BRU-2B02", Model: "Civic", Color: "Prata", SeatCapacity: 50}
 
 	// Carona 1: Feira de Santana -> Lençóis (conecta com a Carona 1 da Ana que chega às 08:30 em Feira!)
 	dep1 := time.Date(date.Year(), date.Month(), date.Day(), 9, 0, 0, 0, time.Local)
@@ -206,7 +207,7 @@ func seedEmpresaB(address string, date time.Time) {
 	ride1 := protocol.CreateRideRequest{
 		DepartureAt: dep1,
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.FeiraDeSantana, Destination: enum.Lencois, DepartureAt: dep1, ArrivalAt: arrLencois1, PriceCents: 6500, AvailableSeats: 4},
+			{Origin: enum.FeiraDeSantana, Destination: enum.Lencois, DepartureAt: dep1, ArrivalAt: arrLencois1, PriceCents: 6500, AvailableSeats: 50},
 		},
 	}
 	_ = seedDriver(address, bruno, brunoVeh, ride1)
@@ -217,7 +218,7 @@ func seedEmpresaB(address string, date time.Time) {
 	ride2 := protocol.CreateRideRequest{
 		DepartureAt: dep2,
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.FeiraDeSantana, Destination: enum.Salvador, DepartureAt: dep2, ArrivalAt: arr2, PriceCents: 3000, AvailableSeats: 4},
+			{Origin: enum.FeiraDeSantana, Destination: enum.Salvador, DepartureAt: dep2, ArrivalAt: arr2, PriceCents: 3000, AvailableSeats: 50},
 		},
 	}
 	_ = ensureRideOnAddress(address, bruno, ride2)
@@ -227,7 +228,7 @@ func seedEmpresaC(address string, date time.Time) {
 	_ = registerUser(address, seedUser{name: "Carla Passageira", email: "carla@gmail.com", role: models.RolePassenger})
 
 	carlos := seedUser{name: "Carlos Motorista", email: "carlos@empresa-c.com", role: models.RoleDriver}
-	carlosVeh := protocol.CreateVehicleRequest{Plate: "CAR-3C03", Model: "Renegade", Color: "Preto", SeatCapacity: 4}
+	carlosVeh := protocol.CreateVehicleRequest{Plate: "CAR-3C03", Model: "Renegade", Color: "Preto", SeatCapacity: 50}
 
 	// Carona 1: Lençóis -> Vitória da Conquista (conecta com a Carona do Bruno que chega às 13:00 em Lençóis!)
 	dep1 := time.Date(date.Year(), date.Month(), date.Day(), 14, 0, 0, 0, time.Local)
@@ -235,7 +236,7 @@ func seedEmpresaC(address string, date time.Time) {
 	ride1 := protocol.CreateRideRequest{
 		DepartureAt: dep1,
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.Lencois, Destination: enum.VitoriaDaConquista, DepartureAt: dep1, ArrivalAt: arrVitoria1, PriceCents: 5500, AvailableSeats: 4},
+			{Origin: enum.Lencois, Destination: enum.VitoriaDaConquista, DepartureAt: dep1, ArrivalAt: arrVitoria1, PriceCents: 5500, AvailableSeats: 50},
 		},
 	}
 	_ = seedDriver(address, carlos, carlosVeh, ride1)
@@ -246,10 +247,10 @@ func seedEmpresaC(address string, date time.Time) {
 	ride2 := protocol.CreateRideRequest{
 		DepartureAt: dep2,
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.FeiraDeSantana, Destination: enum.Salvador, DepartureAt: dep2, ArrivalAt: arr2, PriceCents: 2500, AvailableSeats: 4},
+			{Origin: enum.FeiraDeSantana, Destination: enum.Salvador, DepartureAt: dep2, ArrivalAt: arr2, PriceCents: 2500, AvailableSeats: 50},
 		},
 	}
-	
+
 	_ = ensureRideOnAddress(address, carlos, ride2)
 
 	// Carona 3 (Teste de ABORT): somente uma vaga disponível
@@ -262,9 +263,9 @@ func seedEmpresaC(address string, date time.Time) {
 			{
 				Origin:         enum.FeiraDeSantana,
 				Destination:    enum.Salvador,
-				DepartureAt:   dep3,
-				ArrivalAt:     arr3,
-				PriceCents:    2000,
+				DepartureAt:    dep3,
+				ArrivalAt:      arr3,
+				PriceCents:     2000,
 				AvailableSeats: 1,
 			},
 		},
@@ -275,13 +276,13 @@ func seedEmpresaC(address string, date time.Time) {
 
 func seedGeneric(address, compID string, date time.Time) {
 	drv := seedUser{name: fmt.Sprintf("Motorista %s", compID), email: fmt.Sprintf("driver@%s.test", compID), role: models.RoleDriver}
-	veh := protocol.CreateVehicleRequest{Plate: "GEN-9999", Model: "Sedan", Color: "Cinza", SeatCapacity: 4}
+	veh := protocol.CreateVehicleRequest{Plate: "GEN-9999", Model: "Sedan", Color: "Cinza", SeatCapacity: 50}
 	dep := time.Date(date.Year(), date.Month(), date.Day(), 8, 0, 0, 0, time.Local)
 	arr := dep.Add(2 * time.Hour)
 	ride := protocol.CreateRideRequest{
 		DepartureAt: dep,
 		Segments: []protocol.CreateStageRequest{
-			{Origin: enum.FeiraDeSantana, Destination: enum.Salvador, DepartureAt: dep, ArrivalAt: arr, PriceCents: 3000, AvailableSeats: 4},
+			{Origin: enum.FeiraDeSantana, Destination: enum.Salvador, DepartureAt: dep, ArrivalAt: arr, PriceCents: 3000, AvailableSeats: 50},
 		},
 	}
 	_ = seedDriver(address, drv, veh, ride)
@@ -303,11 +304,11 @@ func seedSingleServer(address string, date time.Time) {
 	}
 
 	_ = seedDriver(address, drivers[0], protocol.CreateVehicleRequest{
-		Plate: "ANA-2026", Model: "Hatch", Color: "Azul", SeatCapacity: 4,
+		Plate: "ANA-2026", Model: "Hatch", Color: "Azul", SeatCapacity: 50,
 	}, anaRide(date))
 
 	_ = seedDriver(address, drivers[1], protocol.CreateVehicleRequest{
-		Plate: "BRU-2026", Model: "Sedan", Color: "Prata", SeatCapacity: 4,
+		Plate: "BRU-2026", Model: "Sedan", Color: "Prata", SeatCapacity: 50,
 	}, brunoRide(date))
 }
 
@@ -382,6 +383,20 @@ func ensureVehicle(tcpClient *client.TCPClient, vehicle protocol.CreateVehicleRe
 		return err
 	}
 	if response.Success == "success" {
+		var existing models.Vehicle
+		if err := json.Unmarshal(response.Payload, &existing); err == nil {
+			if existing.SeatCapacity < vehicle.SeatCapacity {
+				updateResp, err := send(tcpClient, protocol.ActionUpdateVehicle, vehicle)
+				if err != nil {
+					return err
+				}
+				if updateResp.Success != "success" {
+					return errors.New(updateResp.Message)
+				}
+				fmt.Printf("  [+] Veiculo atualizado para capacidade %d: %s\n", vehicle.SeatCapacity, vehicle.Plate)
+				return nil
+			}
+		}
 		fmt.Printf("  [~] Veiculo ja existente: %s\n", vehicle.Plate)
 		return nil
 	}
@@ -412,8 +427,19 @@ func ensureRide(tcpClient *client.TCPClient, ride protocol.CreateRideRequest) er
 	}
 	for _, existingRide := range rides {
 		if sameSeedRide(existingRide, ride) {
-			fmt.Printf("  [~] Carona ja publicada (%s -> %s)\n", ride.Segments[0].Origin, ride.Segments[len(ride.Segments)-1].Destination)
-			return nil
+			hasSeats := false
+			for _, seg := range existingRide.Segments {
+				if seg.AvailableSeats > 0 {
+					hasSeats = true
+					break
+				}
+			}
+			if hasSeats {
+				fmt.Printf("  [~] Carona ja publicada com vagas (%s -> %s)\n", ride.Segments[0].Origin, ride.Segments[len(ride.Segments)-1].Destination)
+				return nil
+			}
+			fmt.Printf("  [!] Carona esgotada por testes anteriores. Cancelando para recriar (%s -> %s)\n", ride.Segments[0].Origin, ride.Segments[len(ride.Segments)-1].Destination)
+			_, _ = send(tcpClient, protocol.ActionCancelRide, protocol.CancelRideRequest{RideID: existingRide.ID})
 		}
 	}
 

@@ -87,6 +87,9 @@ services:
   # Carga inicial de dados de demonstração
   seed:
     image: vaijunto:local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     command: [
       "/app/bin/seed",
       "-servers=empresa-a=empresa-a:8080,empresa-b=empresa-b:8080,empresa-c=empresa-c:8080"
@@ -103,6 +106,9 @@ services:
   # Executar com: docker compose run --rm simulator
   simulator:
     image: vaijunto:local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     profiles: ["tools"]
     command: [
       "/app/bin/simulator",
@@ -117,6 +123,8 @@ services:
         condition: service_healthy
       empresa-c:
         condition: service_healthy
+      seed:
+        condition: service_completed_successfully
 
 volumes:
   empresa-a-storage:

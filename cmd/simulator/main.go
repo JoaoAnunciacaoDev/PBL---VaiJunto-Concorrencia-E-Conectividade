@@ -109,6 +109,20 @@ func main() {
 	printReport(&met, totalDuration)
 }
 
+var activeConsortiumRoutes = []struct {
+	origin enum.City
+	dest   enum.City
+}{
+	{origin: enum.FeiraDeSantana, dest: enum.Salvador},            // Concorrência direta entre Empresa A, B e C
+	{origin: enum.Salvador, dest: enum.FeiraDeSantana},            // Trecho direto Empresa A
+	{origin: enum.Salvador, dest: enum.Lencois},                   // Rota multi-empresa 2PC (A + B)
+	{origin: enum.Salvador, dest: enum.VitoriaDaConquista},        // Rota multi-empresa 2PC (A + B + C)
+	{origin: enum.FeiraDeSantana, dest: enum.Lencois},             // Trecho direto Empresa B
+	{origin: enum.FeiraDeSantana, dest: enum.Alagoinhas},          // Trecho direto Empresa A
+	{origin: enum.Lencois, dest: enum.VitoriaDaConquista},         // Trecho direto Empresa C
+	{origin: enum.FeiraDeSantana, dest: enum.VitoriaDaConquista},  // Rota multi-empresa 2PC (B + C)
+}
+
 func runPassengerWorker(
 	ctx context.Context,
 	workerID int,
@@ -157,7 +171,6 @@ func runPassengerWorker(
 		return
 	}
 
-	cities := enum.Cities()
 	rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID)*1000))
 
 	// 3. Loop contínuo de busca e confirmação sob concorrência
@@ -171,11 +184,10 @@ func runPassengerWorker(
 		origin := fixedOrigin
 		dest := fixedDest
 		if !origin.IsValid() || !dest.IsValid() || origin == dest {
-			origin = cities[rng.Intn(len(cities))]
-			dest = cities[rng.Intn(len(cities))]
-			for dest == origin {
-				dest = cities[rng.Intn(len(cities))]
-			}
+			// Sorteia preferencialmente entre as rotas reais do consórcio
+			route := activeConsortiumRoutes[rng.Intn(len(activeConsortiumRoutes))]
+			origin = route.origin
+			dest = route.dest
 		}
 
 		// Busca itinerários no consórcio
@@ -201,9 +213,18 @@ func runPassengerWorker(
 
 		var itineraries []protocol.ItineraryResponse
 		if err := json.Unmarshal(searchResp.Payload, &itineraries); err != nil || len(itineraries) == 0 {
+			if workerID == 1 && m.noItineraries.Load() == 0 {
+				fmt.Printf("  [Info Worker 1] Nenhuma carona encontrada para %s -> %s na data %s (resposta: %s)\n",
+					origin, dest, date.Format("2006-01-02"), string(searchResp.Payload))
+			}
 			m.noItineraries.Add(1)
 			time.Sleep(50 * time.Millisecond)
 			continue
+		}
+
+		if workerID == 1 && m.confirmed.Load()+m.conflicts.Load() == 0 {
+			fmt.Printf("  [Info Worker 1] %d itinerario(s) localizado(s) para %s -> %s! Iniciando disputa 2PC...\n",
+				len(itineraries), origin, dest)
 		}
 
 		// Escolhe um itinerário aleatório e disputa a reserva

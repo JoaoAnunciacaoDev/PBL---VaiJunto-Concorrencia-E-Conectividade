@@ -357,11 +357,15 @@ docker run -it --rm vaijunto:local /app/bin/api-client -addr 192.168.1.30:8080
 O projeto inclui um simulador autônomo de estresse (`cmd/simulator`) que gera dezenas de passageiros simultâneos concorrendo por vagas e medindo throughput e rejeições:
 
 ```bash
-# Executando nativamente contra o consórcio:
-go run ./cmd/simulator -companies="empresa-a=localhost:8080,empresa-b=localhost:8082,empresa-c=localhost:8084" -passengers=30 -duration=15s
-
-# Ou via Docker Compose (recompila e popula o banco de dados automaticamente):
+# Execução direta via Docker Compose (sobe os nós, roda o seed e executa o teste de estresse):
 docker compose -f docker/docker-compose.yaml run --build --rm simulator
+
+# Para resetar os assentos e rodar novamente do zero:
+docker compose -f docker/docker-compose.yaml down -v
+docker compose -f docker/docker-compose.yaml run --build --rm simulator
+
+# Ou executando nativamente em Go contra nós locais já ligados:
+go run ./cmd/simulator -companies="empresa-a=localhost:8080,empresa-b=localhost:8082,empresa-c=localhost:8084" -passengers=30 -duration=15s
 ```
 
 ---
@@ -376,7 +380,7 @@ Execute toda a suíte de testes do projeto:
 go test ./... -v
 
 # Ou executando toda a suíte de testes via Docker (sem necessidade de Go instalado na máquina):
-docker run --rm -v ${PWD}:/app -w /app golang:1.27-alpine go test ./... -v
+docker run --rm -v ${PWD}:/app -w /app golang:1.27 go test ./... -v
 ```
 
 Executar um teste específico (ex.: teste de reserva concorrente ou teste de recuperação):
@@ -386,7 +390,7 @@ go test -v -run TestNoDoubleSeatBooking ./tests/integration
 go test -v -run TestDistributedCancellationAndDuplicateCheck ./tests/integration
 
 # Ou executando o teste específico via Docker:
-docker run --rm -v ${PWD}:/app -w /app golang:1.27-alpine go test -v -run TestNoDoubleSeatBooking ./tests/integration
+docker run --rm -v ${PWD}:/app -w /app golang:1.27 go test -v -run TestNoDoubleSeatBooking ./tests/integration
 ```
 
 Executar os testes de um pacote específico (ex.: consortium ou httpapi):
@@ -395,7 +399,7 @@ Executar os testes de um pacote específico (ex.: consortium ou httpapi):
 go test -v ./internal/consortium/...
 
 # Ou via Docker:
-docker run --rm -v ${PWD}:/app -w /app golang:1.27-alpine go test -v ./internal/consortium/...
+docker run --rm -v ${PWD}:/app -w /app golang:1.27 go test -v ./internal/consortium/...
 ```
 
 ### Propriedades Distribuídas Provadas nos Testes:
