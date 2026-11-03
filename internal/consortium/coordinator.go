@@ -109,11 +109,31 @@ func (c *Coordinator) ConfirmItinerary(passengerID uuid.UUID, segments []models.
 	var prepareError error
 
 	for _, segment := range segments {
+		log.Printf(
+			"[2pc] tx_id=%s role=coordinator stage=PREPARE_SEND participant=%s segment_id=%s",
+			txID, segment.CompanyID, segment.SegmentID,
+		)
+
 		res := c.prepareSegment(txID, lamport, passengerID, segment)
+
 		if !res.ok {
-			prepareError = fmt.Errorf("trecho da empresa %s indisponível: %s", segment.CompanyID, res.reason)
+			log.Printf(
+				"[2pc] tx_id=%s role=coordinator stage=PREPARE_RESULT participant=%s result=REJECTED reason=%s",
+				txID, segment.CompanyID, res.reason,
+			)
+
+			prepareError = fmt.Errorf(
+				"trecho da empresa %s indisponível: %s",
+				segment.CompanyID, res.reason,
+			)
 			break
 		}
+
+		log.Printf(
+			"[2pc] tx_id=%s role=coordinator stage=PREPARE_RESULT participant=%s result=PREPARED",
+			txID, segment.CompanyID,
+		)
+
 		preparedSegments = append(preparedSegments, segment)
 	}
 
@@ -159,10 +179,24 @@ func (c *Coordinator) ConfirmItinerary(passengerID uuid.UUID, segments []models.
 	// FASE 2: COMMIT
 	var commitErr error
 	for _, segment := range segments {
+		log.Printf(
+			"[2pc] tx_id=%s role=coordinator stage=COMMIT_SEND participant=%s segment_id=%s",
+			txID, segment.CompanyID, segment.SegmentID,
+		)
+
 		if err := c.commitSegment(txID, segment); err != nil {
+			log.Printf(
+				"[2pc] tx_id=%s role=coordinator stage=COMMIT_RESULT participant=%s result=ERROR error=%v",
+				txID, segment.CompanyID, err,
+			)
 			commitErr = err
 			break
 		}
+
+		log.Printf(
+			"[2pc] tx_id=%s role=coordinator stage=COMMIT_RESULT participant=%s result=SUCCESS",
+			txID, segment.CompanyID,
+		)
 	}
 
 	if commitErr != nil {
