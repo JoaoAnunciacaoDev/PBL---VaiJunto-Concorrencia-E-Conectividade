@@ -53,6 +53,7 @@ func NewHTTPServer(
 ) *HTTPServer {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
+	engine.Use(gin.Logger())
 	engine.Use(gin.Recovery())
 
 	s := &HTTPServer{

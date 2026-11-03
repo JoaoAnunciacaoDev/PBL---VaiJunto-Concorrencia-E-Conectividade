@@ -97,6 +97,11 @@ func (s *HTTPServer) handlePrepare(c *gin.Context) {
 		return
 	}
 
+	log.Printf(
+		"[2pc] tx_id=%s role=participant company=%s stage=PREPARE_RECEIVED coordinator=%s segment_id=%s",
+		req.TxID, s.companyID, req.CoordinatorCompanyID, segmentIDParam,
+	)
+
 	// 1. Atualiza o relógio lógico de Lamport com o timestamp recebido
 	currentClock := s.clock.Update(req.LamportClock)
 
@@ -193,6 +198,11 @@ func (s *HTTPServer) handlePrepare(c *gin.Context) {
 		return
 	}
 
+	log.Printf(
+		"[2pc] tx_id=%s role=participant company=%s stage=PREPARED segment_id=%s result=SUCCESS",
+		req.TxID, s.companyID, segmentIDParam,
+	)
+
 	c.JSON(http.StatusOK, PrepareResponse{
 		OK:           true,
 		LamportClock: currentClock,
@@ -212,6 +222,11 @@ func (s *HTTPServer) handleCommit(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "corpo da requisição inválido: " + err.Error()})
 		return
 	}
+
+	log.Printf(
+		"[2pc] tx_id=%s role=participant company=%s stage=COMMIT_RECEIVED coordinator=%s segment_id=%s",
+		req.TxID, s.companyID, req.CoordinatorCompanyID, segmentIDParam,
+	)
 
 	s.clock.Tick()
 
@@ -323,6 +338,11 @@ func (s *HTTPServer) handleCommit(c *gin.Context) {
 	s.lockStore.Release(segmentIDParam, req.TxID)
 	deleteTxRide(segmentIDParam, req.TxID)
 
+	log.Printf(
+		"[2pc] tx_id=%s role=participant company=%s stage=COMMITTED segment_id=%s result=SUCCESS",
+		req.TxID, s.companyID, segmentIDParam,
+	)
+
 	c.JSON(http.StatusOK, CommitResponse{OK: true})
 }
 
@@ -334,6 +354,11 @@ func (s *HTTPServer) handleAbort(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "corpo da requisição inválido: " + err.Error()})
 		return
 	}
+
+	log.Printf(
+		"[2pc] tx_id=%s role=participant company=%s stage=ABORT_RECEIVED coordinator=%s segment_id=%s",
+		req.TxID, s.companyID, req.CoordinatorCompanyID, segmentIDParam,
+	)
 
 	s.clock.Tick()
 
@@ -376,6 +401,11 @@ func (s *HTTPServer) handleAbort(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "wal_write_failed"})
 		return
 	}
+
+	log.Printf(
+		"[2pc] tx_id=%s role=participant company=%s stage=ABORTED segment_id=%s result=SUCCESS",
+		req.TxID, s.companyID, segmentIDParam,
+	)
 
 	c.JSON(http.StatusOK, AbortResponse{OK: true})
 }
