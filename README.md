@@ -316,7 +316,7 @@ Após a inicialização dos servidores nas três estações, execute o povoament
 go run ./cmd/seed -servers="empresa-a=192.168.1.10:8080,empresa-b=192.168.1.20:8080,empresa-c=192.168.1.30:8080"
 
 # Execução via Docker:
-docker run --rm vaijunto:local /app/bin/seed -servers="empresa-a=192.168.1.10:8080,empresa-b=192.168.1.20:8080,empresa-c=192.168.1.30:8080"
+docker run --rm vaijunto:local /app/bin/seed -servers="empresa-a=172.16.103.11:8080,empresa-b=1172.16.103.12:8080,empresa-c=172.16.103.10:8080"
 ```
 
 ---
