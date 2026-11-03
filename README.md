@@ -333,7 +333,7 @@ Execute toda a suíte de testes do projeto:
 go test ./... -v
 
 # Ou executando toda a suíte de testes via Docker (sem necessidade de Go instalado na máquina):
-docker run --rm -v ${PWD}:/app -w /app golang:1.24 go test ./... -v
+docker run --rm -v ${PWD}:/app -w /app golang:1.27-alpine go test ./... -v
 ```
 
 Executar um teste específico (ex.: teste de reserva concorrente ou teste de recuperação):
@@ -343,7 +343,7 @@ go test -v -run TestNoDoubleSeatBooking ./tests/integration
 go test -v -run TestDistributedCancellationAndDuplicateCheck ./tests/integration
 
 # Ou executando o teste específico via Docker:
-docker run --rm -v ${PWD}:/app -w /app golang:1.24 go test -v -run TestNoDoubleSeatBooking ./tests/integration
+docker run --rm -v ${PWD}:/app -w /app golang:1.27-alpine go test -v -run TestNoDoubleSeatBooking ./tests/integration
 ```
 
 Executar os testes de um pacote específico (ex.: consortium ou httpapi):
@@ -352,7 +352,7 @@ Executar os testes de um pacote específico (ex.: consortium ou httpapi):
 go test -v ./internal/consortium/...
 
 # Ou via Docker:
-docker run --rm -v ${PWD}:/app -w /app golang:1.24 go test -v ./internal/consortium/...
+docker run --rm -v ${PWD}:/app -w /app golang:1.27-alpine go test -v ./internal/consortium/...
 ```
 
 ### Propriedades Distribuídas Provadas nos Testes:
