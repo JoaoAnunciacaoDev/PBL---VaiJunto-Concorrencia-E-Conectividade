@@ -230,7 +230,7 @@ Neste modelo, cada estação executa exclusivamente o contêiner do seu respecti
 
 1. Construção da imagem Docker em cada estação:
 ```bash
-docker build -t vaijunto:local -f docker/Dockerfile .
+docker build --no-cache -t vaijunto:local -f docker/Dockerfile .
 ```
 
 2. Inicialização dos serviços em cada estação:
